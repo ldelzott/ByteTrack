@@ -16,13 +16,13 @@ class Exp(MyExp):
         self.width = 1.25
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
         self.train_ann = "train.json"
-        self.val_ann = "test.json"    # change to train.json when running on training set
+        self.val_ann = "train.json"    # change to train.json when running on training set
         self.input_size = (800, 1440)
         self.test_size = (800, 1440)
         self.random_size = (18, 32)
         self.max_epoch = 80
         self.print_interval = 20
-        self.eval_interval = 5
+        self.eval_interval = 5000000
         self.test_conf = 0.001
         self.nmsthre = 0.7
         self.no_aug_epochs = 10
@@ -40,7 +40,7 @@ class Exp(MyExp):
         )
 
         dataset = MOTDataset(
-            data_dir=os.path.join(get_yolox_datadir(), "mix_det"),
+            data_dir=os.path.join(get_yolox_datadir(), "mix_mot20_ch"),
             json_file=self.train_ann,
             name='',
             img_size=self.input_size,
