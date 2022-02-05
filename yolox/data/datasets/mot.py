@@ -13,7 +13,14 @@ class MOTDataset(Dataset):
     COCO dataset class.
     """
 
-    def __init__(
+    def __init__( # This function is called in the exps yolox_x_mot17_half.py in this way:  dataset = MOTDataset(
+                                                                                                            # data_dir=os.path.join(get_yolox_datadir(), "mot"),
+                                                                                                            # json_file=self.train_ann,
+                                                                                                            # name='train',
+                                                                                                            # img_size=self.input_size,
+                                                                                                            # preproc=TrainTransform(rgb_means=(0.485, 0.456, 0.406),
+                                                                                                            # std=(0.229, 0.224, 0.225),
+                                                                                                            # max_labels=500,),)
         self,
         data_dir=None,
         json_file="train_half.json",
@@ -56,8 +63,10 @@ class MOTDataset(Dataset):
         im_ann = self.coco.loadImgs(id_)[0]
         width = im_ann["width"]
         height = im_ann["height"]
-        frame_id = im_ann["frame_id"]
-        video_id = im_ann["video_id"]
+        #frame_id = im_ann["frame_id"] # Why frame and video ID should be used during training ?
+        frame_id = None
+        #video_id = im_ann["video_id"]
+        video_id = None
         anno_ids = self.coco.getAnnIds(imgIds=[int(id_)], iscrowd=False)
         annotations = self.coco.loadAnns(anno_ids)
         objs = []
@@ -78,7 +87,8 @@ class MOTDataset(Dataset):
             cls = self.class_ids.index(obj["category_id"])
             res[ix, 0:4] = obj["clean_bbox"]
             res[ix, 4] = cls
-            res[ix, 5] = obj["track_id"]
+            #res[ix, 5] = obj["track_id"] # See comment line 66
+            res[ix, 5] = None
 
         file_name = im_ann["file_name"] if "file_name" in im_ann else "{:012}".format(id_) + ".jpg"
         img_info = (height, width, frame_id, video_id, file_name)

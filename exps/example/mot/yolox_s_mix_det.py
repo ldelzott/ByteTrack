@@ -1,4 +1,9 @@
 # encoding: utf-8
+
+# Note that if "CUDA out of memory error" appears due to abrupt exit during training, one can use "nvidia-smi" to
+# list the current processes that use the GPU memory and then use the command "sudo kill -9 [process_pid]" to release
+# the memory.
+
 import os
 import random
 import torch
@@ -17,15 +22,17 @@ class Exp(MyExp):
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
         self.train_ann = "train.json"
         self.val_ann = "train.json"
-        self.input_size = (608, 1088)
-        self.test_size = (608, 1088)
+        #self.input_size = (896, 1600)
+        self.input_size = (1600, 1600) # The values in the tuple could be restrained to multiples of 32
+        self.test_size = (1600, 1600)
+        #self.test_size = (720, 1280)
         self.random_size = (12, 26)
-        self.max_epoch = 80
+        self.max_epoch = 30
         self.print_interval = 20
-        self.eval_interval = 5
+        self.eval_interval = 500000 # This evaluation require further cleaning (i.e the "frames_id", "track_id", "videos_id" doesn't have sense in the current context but were in the original JSON training file)
         self.test_conf = 0.001
         self.nmsthre = 0.7
-        self.no_aug_epochs = 10
+        self.no_aug_epochs = 0 # Those augmented epochs could be launched at the epoch "max_epoch-no_aug_epochs"
         self.basic_lr_per_img = 0.001 / 64.0
         self.warmup_epochs = 1
 
@@ -40,7 +47,7 @@ class Exp(MyExp):
         )
 
         dataset = MOTDataset(
-            data_dir=os.path.join(get_yolox_datadir(), "mix_det"),
+            data_dir=os.path.join(get_yolox_datadir(), "mix_mot20_ch"),
             json_file=self.train_ann,
             name='',
             img_size=self.input_size,
@@ -95,10 +102,10 @@ class Exp(MyExp):
         from yolox.data import MOTDataset, ValTransform
 
         valdataset = MOTDataset(
-            data_dir=os.path.join(get_yolox_datadir(), "mot"),
+            data_dir=os.path.join(get_yolox_datadir(), "MOT20"),
             json_file=self.val_ann,
             img_size=self.test_size,
-            name='train',
+            name='test',
             preproc=ValTransform(
                 rgb_means=(0.485, 0.456, 0.406),
                 std=(0.229, 0.224, 0.225),

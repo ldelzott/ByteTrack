@@ -131,8 +131,8 @@ def random_perspective(
         xy = np.concatenate((x.min(1), y.min(1), x.max(1), y.max(1))).reshape(4, n).T
 
         # clip boxes
-        #xy[:, [0, 2]] = xy[:, [0, 2]].clip(0, width)
-        #xy[:, [1, 3]] = xy[:, [1, 3]].clip(0, height)
+        xy[:, [0, 2]] = xy[:, [0, 2]].clip(0, width)
+        xy[:, [1, 3]] = xy[:, [1, 3]].clip(0, height)
 
         # filter candidates
         i = box_candidates(box1=targets[:, :4].T * s, box2=xy.T)

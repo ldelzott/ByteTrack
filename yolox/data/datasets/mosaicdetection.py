@@ -118,12 +118,12 @@ class MosaicDetection(Dataset):
 
             if len(mosaic_labels):
                 mosaic_labels = np.concatenate(mosaic_labels, 0)
-                '''
+
                 np.clip(mosaic_labels[:, 0], 0, 2 * input_w, out=mosaic_labels[:, 0])
                 np.clip(mosaic_labels[:, 1], 0, 2 * input_h, out=mosaic_labels[:, 1])
                 np.clip(mosaic_labels[:, 2], 0, 2 * input_w, out=mosaic_labels[:, 2])
                 np.clip(mosaic_labels[:, 3], 0, 2 * input_h, out=mosaic_labels[:, 3])
-                '''
+
                 
                 mosaic_labels = mosaic_labels[mosaic_labels[:, 0] < 2 * input_w]
                 mosaic_labels = mosaic_labels[mosaic_labels[:, 2] > 0]
@@ -213,14 +213,14 @@ class MosaicDetection(Dataset):
                 origin_w - cp_bboxes_origin_np[:, 0::2][:, ::-1]
             )
         cp_bboxes_transformed_np = cp_bboxes_origin_np.copy()
-        '''
+
         cp_bboxes_transformed_np[:, 0::2] = np.clip(
             cp_bboxes_transformed_np[:, 0::2] - x_offset, 0, target_w
         )
         cp_bboxes_transformed_np[:, 1::2] = np.clip(
             cp_bboxes_transformed_np[:, 1::2] - y_offset, 0, target_h
         )
-        '''
+
         cp_bboxes_transformed_np[:, 0::2] = cp_bboxes_transformed_np[:, 0::2] - x_offset
         cp_bboxes_transformed_np[:, 1::2] = cp_bboxes_transformed_np[:, 1::2] - y_offset
         keep_list = box_candidates(cp_bboxes_origin_np.T, cp_bboxes_transformed_np.T, 5)
