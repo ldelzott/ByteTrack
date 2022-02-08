@@ -21,18 +21,16 @@ class Exp(MyExp):
         self.width = 0.50
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
         self.train_ann = "train.json"
-        self.val_ann = "train.json"
-        #self.input_size = (896, 1600)
-        self.input_size = (1600, 1600) # The values in the tuple could be restrained to multiples of 32
-        self.test_size = (1600, 1600)
-        #self.test_size = (720, 1280)
+        self.val_ann = "validation.json"
+        self.input_size = (1280, 1280) # The values in the tuple could be restrained to multiples of 32
+        self.test_size = (1280, 1280)
         self.random_size = (12, 26)
-        self.max_epoch = 30
+        self.max_epoch = 40
         self.print_interval = 20
-        self.eval_interval = 500000 # This evaluation require further cleaning (i.e the "frames_id", "track_id", "videos_id" doesn't have sense in the current context but were in the original JSON training file)
+        self.eval_interval = 10 # TO DO : is the evaluation influenced by the removal of track_id, video_id and frame_id ?
         self.test_conf = 0.001
         self.nmsthre = 0.7
-        self.no_aug_epochs = 0 # Those augmented epochs could be launched at the epoch "max_epoch-no_aug_epochs"
+        self.no_aug_epochs = 10 # Those augmented epochs are launched at the epoch "max_epoch-no_aug_epochs"
         self.basic_lr_per_img = 0.001 / 64.0
         self.warmup_epochs = 1
 
@@ -47,8 +45,10 @@ class Exp(MyExp):
         )
 
         dataset = MOTDataset(
-            data_dir=os.path.join(get_yolox_datadir(), "mix_mot20_ch"),
+            data_dir=os.path.join(get_yolox_datadir(), "ant_training_dataset"),
             json_file=self.train_ann,
+
+            # Define the intermediate directory that contains the images ('' means no intermediate directory)
             name='',
             img_size=self.input_size,
             preproc=TrainTransform(
@@ -102,10 +102,10 @@ class Exp(MyExp):
         from yolox.data import MOTDataset, ValTransform
 
         valdataset = MOTDataset(
-            data_dir=os.path.join(get_yolox_datadir(), "MOT20"),
+            data_dir=os.path.join(get_yolox_datadir(), "ant_training_dataset"),
             json_file=self.val_ann,
             img_size=self.test_size,
-            name='test',
+            name='',
             preproc=ValTransform(
                 rgb_means=(0.485, 0.456, 0.406),
                 std=(0.229, 0.224, 0.225),

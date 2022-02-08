@@ -63,10 +63,10 @@ class MOTDataset(Dataset):
         im_ann = self.coco.loadImgs(id_)[0]
         width = im_ann["width"]
         height = im_ann["height"]
-        #frame_id = im_ann["frame_id"] # Why frame and video ID should be used during training ?
-        frame_id = None
-        #video_id = im_ann["video_id"]
-        video_id = None
+        #frame_id = im_ann["frame_id"] : the default value '1' avoid to break augmentation & evaluation processes
+        frame_id = 1
+        #video_id = im_ann["video_id"] : the default value '1' avoid to break augmentation & evaluation processes
+        video_id = 1
         anno_ids = self.coco.getAnnIds(imgIds=[int(id_)], iscrowd=False)
         annotations = self.coco.loadAnns(anno_ids)
         objs = []
@@ -87,8 +87,8 @@ class MOTDataset(Dataset):
             cls = self.class_ids.index(obj["category_id"])
             res[ix, 0:4] = obj["clean_bbox"]
             res[ix, 4] = cls
-            #res[ix, 5] = obj["track_id"] # See comment line 66
-            res[ix, 5] = None
+            #res[ix, 5] = obj["track_id"] # See comment line 66; same comment for the default value 1
+            res[ix, 5] = 1
 
         file_name = im_ann["file_name"] if "file_name" in im_ann else "{:012}".format(id_) + ".jpg"
         img_info = (height, width, frame_id, video_id, file_name)
