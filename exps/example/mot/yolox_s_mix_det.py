@@ -25,12 +25,12 @@ class Exp(MyExp):
         self.input_size = (1280, 1280) # The values in the tuple could be restrained to multiples of 32
         self.test_size = (1280, 1280)
         self.random_size = (12, 26)
-        self.max_epoch = 40
+        self.max_epoch = 1
         self.print_interval = 20
         self.eval_interval = 10 # TO DO : is the evaluation influenced by the removal of track_id, video_id and frame_id ?
         self.test_conf = 0.001
         self.nmsthre = 0.7
-        self.no_aug_epochs = 10 # Those augmented epochs are launched at the epoch "max_epoch-no_aug_epochs"
+        self.no_aug_epochs = 1 # Those augmented epochs are launched at the epoch "max_epoch-no_aug_epochs"
         self.basic_lr_per_img = 0.001 / 64.0
         self.warmup_epochs = 1
 

@@ -8,6 +8,8 @@ from yolox.data.data_augment import preproc
 from yolox.exp import get_exp
 from yolox.utils import fuse_model, get_model_info, postprocess, vis
 from yolox.utils.visualize import plot_tracking
+from yolox.swarm_metrics.swarm_metrics_utils import dump_annotated_images, dump_non_annotated_images
+from yolox.swarm_metrics.swarm_metrics import SWARMMetrics
 from yolox.tracker.byte_tracker import BYTETracker
 from yolox.tracking_utils.timer import Timer
 
@@ -27,7 +29,7 @@ def make_parser():
     parser.add_argument("-n", "--name", type=str, default=None, help="model name")
 
     parser.add_argument(
-        #"--path", default="./datasets/mot/train/MOT17-05-FRCNN/img1", help="path to images or video"
+        # "--path", default="./datasets/mot/train/MOT17-05-FRCNN/img1", help="path to images or video"
         "--path", default="./videos/palace.mp4", help="path to images or video"
     )
     parser.add_argument("--camid", type=int, default=0, help="webcam demo camera id")
@@ -76,6 +78,17 @@ def make_parser():
         action="store_true",
         help="Using TensorRT model for testing.",
     )
+    parser.add_argument(
+        "--swarm_metric_1",
+        dest="swarm_metric_1",
+        default=False,
+        action="store_true",
+        help="Enable computation and rendering of swarm metric 1",
+    )
+    parser.add_argument(
+        # "--path", default="./datasets/mot/train/MOT17-05-FRCNN/img1", help="path to images or video"
+        "--dump_path", dest="dump", default=None, help="dump images and corresponding tracklets into specified folder"
+    )
     # tracking args
     parser.add_argument("--track_thresh", type=float, default=0.5, help="tracking confidence threshold")
     parser.add_argument("--track_buffer", type=int, default=30, help="the frames for keep lost tracks")
@@ -104,20 +117,21 @@ def write_results(filename, results):
                 if track_id < 0:
                     continue
                 x1, y1, w, h = tlwh
-                line = save_format.format(frame=frame_id, id=track_id, x1=round(x1, 1), y1=round(y1, 1), w=round(w, 1), h=round(h, 1), s=round(score, 2))
+                line = save_format.format(frame=frame_id, id=track_id, x1=round(x1, 1), y1=round(y1, 1), w=round(w, 1),
+                                          h=round(h, 1), s=round(score, 2))
                 f.write(line)
     logger.info('save results to {}'.format(filename))
 
 
 class Predictor(object):
     def __init__(
-        self,
-        model,
-        exp,
-        trt_file=None,
-        decoder=None,
-        device="cpu",
-        fp16=False
+            self,
+            model,
+            exp,
+            trt_file=None,
+            decoder=None,
+            device="cpu",
+            fp16=False
     ):
         self.model = model
         self.decoder = decoder
@@ -169,7 +183,7 @@ class Predictor(object):
             outputs = postprocess(
                 outputs, self.num_classes, self.confthre, self.nmsthre
             )
-            #logger.info("Infer time: {:.4f}s".format(time.time() - t0))
+            # logger.info("Infer time: {:.4f}s".format(time.time() - t0))
         return outputs, img_info
 
 
@@ -204,12 +218,12 @@ def image_demo(predictor, vis_folder, path, current_time, save_result):
             results.append((frame_id + 1, online_tlwhs, online_ids, online_scores))
             timer.toc()
             online_im = plot_tracking(img_info['raw_img'], online_tlwhs, online_ids, frame_id=frame_id + 1,
-                                          fps=1. / timer.average_time)
+                                      fps=1. / timer.average_time)
         else:
             timer.toc()
             online_im = img_info['raw_img']
 
-        #result_image = predictor.visual(outputs[0], img_info, predictor.confthre)
+        # result_image = predictor.visual(outputs[0], img_info, predictor.confthre)
         if save_result:
             save_folder = os.path.join(
                 vis_folder, time.strftime("%Y_%m_%d_%H_%M_%S", current_time)
@@ -221,7 +235,7 @@ def image_demo(predictor, vis_folder, path, current_time, save_result):
         frame_id += 1
         if ch == 27 or ch == ord("q") or ch == ord("Q"):
             break
-    #write_results(result_filename, results)
+    # write_results(result_filename, results)
 
 
 def imageflow_demo(predictor, vis_folder, current_time, args):
@@ -242,6 +256,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
         save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (int(width), int(height))
     )
     tracker = BYTETracker(args, frame_rate=30)
+    swarm_metrics = SWARMMetrics(args)
     timer = Timer()
     frame_id = 0
     results = []
@@ -267,12 +282,63 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 results.append((frame_id + 1, online_tlwhs, online_ids, online_scores))
                 timer.toc()
                 online_im = plot_tracking(img_info['raw_img'], online_tlwhs, online_ids, frame_id=frame_id + 1,
-                                          fps=1. / timer.average_time)
+                                          fps=1. / timer.average_time, swarm_metrics=swarm_metrics)
             else:
                 timer.toc()
                 online_im = img_info['raw_img']
             if args.save_result:
                 vid_writer.write(online_im)
+            ch = cv2.waitKey(1)
+            if ch == 27 or ch == ord("q") or ch == ord("Q"):
+                break
+        else:
+            break
+        frame_id += 1
+
+
+
+'''
+This function should enable offline metrics computation. TO DO: implementation of those offline metrics 
+At the moment, the function dump output data on the specified path.
+'''
+def offline_swarm_metrics_video_mode(predictor, file_name, current_time, args):
+    cap = cv2.VideoCapture(args.path if args.demo == "video" else args.camid)
+    save_folder = os.path.join(
+        args.dump, time.strftime("%Y_%m_%d_%H_%M_%S", current_time)
+    )
+    os.makedirs(save_folder, exist_ok=True)
+    logger.info(f"starting in dump mode...")
+    tracker = BYTETracker(args, frame_rate=30)
+    timer = Timer()
+    frame_id = 0
+    results = []
+    while True:
+        if frame_id % 20 == 0:
+            logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
+        ret_val, frame = cap.read()
+        if ret_val:
+            outputs, img_info = predictor.inference(frame, timer)
+            if outputs[0] is not None:
+                online_targets = tracker.update(outputs[0], [img_info['height'], img_info['width']], exp.test_size)
+                online_tlwhs = []
+                online_ids = []
+                online_scores = []
+                for t in online_targets:
+                    tlwh = t.tlwh
+                    tid = t.track_id
+                    vertical = tlwh[2] / tlwh[3] > 1.6
+                    if tlwh[2] * tlwh[3] > args.min_box_area and not vertical:
+                        online_tlwhs.append(tlwh)
+                        online_ids.append(tid)
+                        online_scores.append(t.score)
+                results.append((frame_id + 1, online_tlwhs, online_ids, online_scores))
+                timer.toc()
+                dump_annotated_images(img_info['raw_img'], online_tlwhs, online_ids, save_folder, current_time, args,
+                                      frame_id=frame_id + 1,
+                                      fps=1. / timer.average_time)
+            else:
+                timer.toc()
+                dump_non_annotated_images(img_info['raw_img'], save_folder, current_time, args, frame_id)
             ch = cv2.waitKey(1)
             if ch == 27 or ch == ord("q") or ch == ord("Q"):
                 break
@@ -325,9 +391,9 @@ def main(exp, args):
     if args.fuse:
         logger.info("\tFusing model...")
         model = fuse_model(model)
-    
+
     if args.fp16:
-            model = model.half()  # to FP16
+        model = model.half()  # to FP16
 
     if args.trt:
         assert not args.fuse, "TensorRT model is not support model fusing!"
@@ -347,7 +413,10 @@ def main(exp, args):
     if args.demo == "image":
         image_demo(predictor, vis_folder, args.path, current_time, args.save_result)
     elif args.demo == "video" or args.demo == "webcam":
-        imageflow_demo(predictor, vis_folder, current_time, args)
+        if args.dump is None:
+            imageflow_demo(predictor, vis_folder, current_time, args)
+        else:
+            offline_swarm_metrics_video_mode(predictor, file_name, current_time, args)
 
 
 if __name__ == "__main__":
