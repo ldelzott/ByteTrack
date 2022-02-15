@@ -79,11 +79,46 @@ def make_parser():
         help="Using TensorRT model for testing.",
     )
     parser.add_argument(
+        "--hide_bounding_boxes",
+        dest="hide_bounding_boxes",
+        default=False,
+        action="store_true",
+        help="Hide the bounding boxes in visualization datas (output video)",
+    )
+    parser.add_argument(
         "--swarm_metric_1",
         dest="swarm_metric_1",
         default=False,
         action="store_true",
         help="Enable computation and rendering of swarm metric 1",
+    )
+    parser.add_argument(
+        "--swarm_metric_2",
+        dest="swarm_metric_2",
+        default=False,
+        action="store_true",
+        help="Enable computation and rendering of swarm metric 2",
+    )
+    parser.add_argument(
+        "--swarm_metric_3",
+        dest="swarm_metric_3",
+        default=False,
+        action="store_true",
+        help="Enable computation and rendering of swarm metric 3",
+    )
+    parser.add_argument(
+        "--swarm_metric_4",
+        dest="swarm_metric_4",
+        default=False,
+        action="store_true",
+        help="Enable computation and rendering of swarm metric 4",
+    )
+    parser.add_argument(
+        "--swarm_metric_5",
+        dest="swarm_metric_5",
+        default=False,
+        action="store_true",
+        help="Enable computation and rendering of swarm metric 5",
     )
     parser.add_argument(
         # "--path", default="./datasets/mot/train/MOT17-05-FRCNN/img1", help="path to images or video"
@@ -282,7 +317,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 results.append((frame_id + 1, online_tlwhs, online_ids, online_scores))
                 timer.toc()
                 online_im = plot_tracking(img_info['raw_img'], online_tlwhs, online_ids, frame_id=frame_id + 1,
-                                          fps=1. / timer.average_time, swarm_metrics=swarm_metrics)
+                                          fps=1. / timer.average_time, swarm_metrics=swarm_metrics, disable_basic_hud=args.hide_bounding_boxes)
             else:
                 timer.toc()
                 online_im = img_info['raw_img']
