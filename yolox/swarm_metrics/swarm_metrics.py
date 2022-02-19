@@ -14,6 +14,10 @@ class SWARMMetrics(object):
         self.metric_1_stack = deque(maxlen=self.max_queue_size)
         # Contains moving average of center of masses
         self.metric_2_stack = deque(maxlen=self.max_queue_size)
+        # Contains delta_x and delta_y of inst. global velocity vector
+        self.metric_5_stack = deque(maxlen=self.max_queue_size)
+        # Contains moving average of delta_x and delta_y of inst. global velocity vector
+        self.metric_6_stack = deque(maxlen=self.max_queue_size)
 
     def online_metrics_inputs(self, im, im_h, im_w, tlwhs, obj_ids):
         self.tracking_datas.append([im, [im_w, im_h], tlwhs, obj_ids])
@@ -29,6 +33,10 @@ class SWARMMetrics(object):
             self.metric_1_stack.popleft()
         if len(self.metric_2_stack) > self.max_queue_size:
             self.metric_2_stack.popleft()
+        if len(self.metric_5_stack) > self.max_queue_size:
+            self.metric_5_stack.popleft()
+        if len(self.metric_6_stack) > self.max_queue_size:
+            self.metric_6_stack.popleft()
 
     def select_online_metrics(self,):
         # Add here additional metrics
@@ -39,6 +47,8 @@ class SWARMMetrics(object):
             self.compute_metric_1()
         if self.args.swarm_metric_3:
             self.compute_metric_3()
+        if self.args.swarm_metric_6:
+            self.compute_metric_6()
 
     """
     'Immediate' center of mass location
@@ -80,8 +90,7 @@ class SWARMMetrics(object):
         Raw velocity vectors 
         metric_3 display the velocity vector of each moving entity
         metric_4 highlight the fastest moving entity on a given frame (require metric_3)
-        metric_5 compute a global velocity vector; the tail of that vector is given by the moving average of the 
-                center of masse.
+        metric_5 compute a global velocity vector; the tail of that vector is given by the inst. center of masse.
     '''
     def compute_metric_3(self, ):
         vector_scale = 2
@@ -104,7 +113,7 @@ class SWARMMetrics(object):
                         norm = x_delta*x_delta + y_delta*y_delta
                         vector_tip = tuple(map(int, (center_current[0] + x_delta * vector_scale,
                                         center_current[1] + y_delta * vector_scale)))
-                        if norm >= fastest_entity[1] and self.args.swarm_metric_4:
+                        if self.args.swarm_metric_4 and norm >= fastest_entity[1]:
                             fastest_entity = obj_id_current, norm, center_current
 
                         sum_velocity_vector_x += x_delta
@@ -115,9 +124,31 @@ class SWARMMetrics(object):
                         cv2.circle(self.tracking_datas[-1][0], center_current, radius=3, color=(0, 255, 0), thickness=3)
             if fastest_entity[0] is not None:
                 cv2.circle(self.tracking_datas[-1][0], fastest_entity[2], radius=40, color=(0, 0, 255), thickness=2)
-            global_velocity_vector_tip = tuple(map(int, (self.metric_2_stack[-1][0] + vector_scale * sum_velocity_vector_x / current_entity_number,
-                                self.metric_2_stack[-1][1] + vector_scale * sum_velocity_vector_y / current_entity_number)))
+            global_velocity_vector_tip = tuple(map(int, (self.metric_1_stack[-1][0] + vector_scale*sum_velocity_vector_x / current_entity_number,
+                                self.metric_1_stack[-1][1] + vector_scale*sum_velocity_vector_y / current_entity_number)))
 
-            if self.args.swarm_metric_5:
-                cv2.line(self.tracking_datas[-1][0], self.metric_2_stack[-1], global_velocity_vector_tip, (0, 255, 0), 3)
+            if self.args.swarm_metric_5 and self.args.swarm_metric_1:
+                instantaneous_center_of_masses = tuple(map(int, (self.metric_1_stack[-1][0], self.metric_1_stack[-1][1])))
+                cv2.line(self.tracking_datas[-1][0], instantaneous_center_of_masses, global_velocity_vector_tip, (0, 0, 255), 3)
+                self.metric_5_stack.append([sum_velocity_vector_x / current_entity_number,
+                                            sum_velocity_vector_y / current_entity_number])
+
+    '''
+    Moving average of the global velocity vector ; displayed with "moving average of center of masses" as the vector's tail
+    '''
+    def compute_metric_6(self,):
+        if len(self.metric_5_stack) > 1:
+            sum_dx = 0
+            sum_dy = 0
+            vector_scale = 2
+            metric_5_stack_size = len(self.metric_5_stack)
+            for _, deltas in enumerate(self.metric_5_stack):
+                dx, dy = deltas
+                sum_dx += dx
+                sum_dy += dy
+            self.metric_6_stack.append([sum_dx/metric_5_stack_size, sum_dy/metric_5_stack_size])
+            vector_tail = tuple(map(int, (self.metric_2_stack[-1][0], self.metric_2_stack[-1][1])))
+            vector_tip = tuple(map(int, (vector_tail[0] + vector_scale*self.metric_6_stack[-1][0], vector_tail[1]
+                                         + vector_scale*self.metric_6_stack[-1][1])))
+            cv2.line(self.tracking_datas[-1][0], vector_tail, vector_tip, (0, 255, 0), 3)
 

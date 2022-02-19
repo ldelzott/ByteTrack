@@ -5,6 +5,8 @@ import numpy as np
 import cv2
 
 
+
+
 def dump_annotated_images(image, tlwhs, obj_ids, save_folder, current_time, args, frame_id=0, fps=0.):
     frame_name = str(frame_id)+".jpg"
     annotation_name = str(frame_id)+".json"

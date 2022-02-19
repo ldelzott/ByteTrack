@@ -121,6 +121,13 @@ def make_parser():
         help="Enable computation and rendering of swarm metric 5",
     )
     parser.add_argument(
+        "--swarm_metric_6",
+        dest="swarm_metric_6",
+        default=False,
+        action="store_true",
+        help="Enable computation and rendering of swarm metric 6",
+    )
+    parser.add_argument(
         # "--path", default="./datasets/mot/train/MOT17-05-FRCNN/img1", help="path to images or video"
         "--dump_path", dest="dump", default=None, help="dump images and corresponding tracklets into specified folder"
     )
