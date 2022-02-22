@@ -1,10 +1,6 @@
 import os.path
-from tinydb import TinyDB, Query
-
-import numpy as np
+from tinydb import TinyDB
 import cv2
-
-
 
 
 def dump_annotated_images(image, tlwhs, obj_ids, save_folder, current_time, args, frame_id=0, fps=0.):
@@ -18,6 +14,43 @@ def dump_annotated_images(image, tlwhs, obj_ids, save_folder, current_time, args
     cv2.waitKey(0)
 
 
+def dump_swarm_metrics(visualization_folder,frame_id, metric_1, metric_2, metric_5, metric_6):
+    if metric_1 is not None:
+        metric_1_0 = metric_1[0]
+        metric_1_1 = metric_1[1]
+    else:
+        metric_1_0 = 'empty'
+        metric_1_1 = 'empty'
+
+    if metric_2 is not None:
+        metric_2_0 = metric_2[0]
+        metric_2_1 = metric_2[1]
+    else:
+        metric_2_0 = 'empty'
+        metric_2_1 = 'empty'
+
+    if metric_5 is not None:
+        metric_5_0 = metric_5[0]
+        metric_5_1 = metric_5[1]
+    else:
+        metric_5_0 = 'empty'
+        metric_5_1 = 'empty'
+
+    if metric_6 is not None:
+        metric_6_0 = metric_6[0]
+        metric_6_1 = metric_6[1]
+    else:
+        metric_6_0 = 'empty'
+        metric_6_1 = 'empty'
+
+    file_name = "metrics_dump.json"
+    json_dump_file = TinyDB(os.path.join(visualization_folder, file_name))
+    json_dump_file.insert({'frame_id': frame_id, 'metric_1_0': metric_1_0, 'metric_1_1': metric_1_1,
+                           'metric_2_0': metric_2_0, 'metric_2_1': metric_2_1,
+                           'metric_5_0': metric_5_0, 'metric_5_1': metric_5_1,
+                           'metric_6_0': metric_6_0, 'metric_6_1': metric_6_1})
+
+
 def dump_non_annotated_images(image, save_folder, current_time, args, frame_id):
     frame_name = str(frame_id) + ".jpg"
     print(os.path.join(save_folder, frame_name))
@@ -26,6 +59,7 @@ def dump_non_annotated_images(image, save_folder, current_time, args, frame_id):
     print("Hello - dump_non_annotated_images")
     print(save_folder)
     print(current_time)
+
 
 def get_color(idx):
     idx = idx * 3

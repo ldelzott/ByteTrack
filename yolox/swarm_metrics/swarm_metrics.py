@@ -1,19 +1,20 @@
 import numpy as np
-from yolox.swarm_metrics.swarm_metrics_utils import get_color
+from yolox.swarm_metrics.swarm_metrics_utils import get_color, dump_swarm_metrics
 import cv2
 from collections import deque
 import numpy as np
 import time
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 
 
 class SWARMMetrics(object):
-    def __init__(self, args):
+    def __init__(self, args, vis_folder):
         self.args = args
         self.max_queue_size = 7
         self.max_graph_size = 40
         self.frame_count = 0
+        self.frame_id = 0
+        self.visualization_folder = vis_folder
         self.tracking_datas = deque(maxlen=self.max_queue_size)
 
         # Contains center of masses
@@ -25,6 +26,7 @@ class SWARMMetrics(object):
         # Contains moving average of delta_x and delta_y of inst. global velocity vector
         self.metric_6_stack = deque(maxlen=self.max_queue_size)
 
+        # The 'metric_i_graph' are similar to 'metric_i_stack' but the size of the queues. TODO: remove redundancy ?
         self.metric_1_graph = deque(maxlen=self.max_graph_size)
         self.metric_2_graph = deque(maxlen=self.max_graph_size)
         self.metric_5_graph = deque(maxlen=self.max_graph_size)
@@ -33,13 +35,50 @@ class SWARMMetrics(object):
         self.figures = []
         self.launch_graphs()
 
-    def online_metrics_inputs(self, im, im_h, im_w, tlwhs, obj_ids):
+    def online_metrics_inputs(self, im, im_h, im_w, tlwhs, obj_ids, frame_id=0):
         self.tracking_datas.append([im, [im_w, im_h], tlwhs, obj_ids])
+        self.frame_id = frame_id
+
         self.select_online_metrics()
+        self.dump_metrics()
         self.stack_trim()
+
         # Return an annotated image
         return self.tracking_datas[-1][0]
 
+    def dump_metrics(self):
+        if not self.args.dump_metrics:
+            return
+        if len(self.metric_1_graph) == 0:
+            metric_1 = None
+        else:
+            metric_1 = self.metric_1_graph[-1]
+
+        if len(self.metric_2_graph) == 0:
+            metric_2 = None
+        else:
+            metric_2 = self.metric_2_graph[-1]
+
+        if len(self.metric_5_graph) == 0:
+            metric_5 = None
+        else:
+            metric_5 = self.metric_5_graph[-1]
+
+        if len(self.metric_6_graph) == 0:
+            metric_6 = None
+        else:
+            metric_6 = self.metric_6_graph[-1]
+
+        dump_swarm_metrics(self.visualization_folder, self.frame_id,  metric_1, metric_2, metric_5, metric_6)
+
+
+
+
+
+    """
+        The various queues used in SWARMMetrics are limited in size: 'stack_trim' is used to remove the oldest item 
+        of a queues when his maximum size is reached.
+    """
     def stack_trim(self):
         if len(self.tracking_datas) > self.max_queue_size:
             self.tracking_datas.popleft()
@@ -74,9 +113,8 @@ class SWARMMetrics(object):
         self.update_graphs()
 
     """
-    'Immediate' center of mass location
+        'Immediate' center of mass location
     """
-
     def compute_metric_1(self, ):
         sum_mass = 0
         sum_x = 0
@@ -96,10 +134,9 @@ class SWARMMetrics(object):
         if self.args.swarm_metric_2:
             self.compute_metric_2()
 
-    '''
+    """
         Moving average of the center masses locations over the last x=max_queue_size frames
-    '''
-
+    """
     def compute_metric_2(self, ):
         sum_x = 0
         sum_y = 0
@@ -114,13 +151,12 @@ class SWARMMetrics(object):
         self.metric_2_graph.append(mean_center_float)
         cv2.circle(self.tracking_datas[-1][0], mean_center, radius=5, color=(0, 255, 0), thickness=7)
 
-    '''
+    """
         Raw velocity vectors 
         metric_3 display the velocity vector of each moving entity
         metric_4 highlight the fastest moving entity on a given frame (require metric_3)
         metric_5 compute a global velocity vector; the tail of that vector is given by the inst. center of masse.
-    '''
-
+    """
     def compute_metric_3(self, ):
         vector_scale = 2
         sum_velocity_vector_x = 0
@@ -167,10 +203,9 @@ class SWARMMetrics(object):
                 self.metric_5_stack.append(global_velocity_deltas_float)
                 self.metric_5_graph.append(global_velocity_deltas_float)
 
-    '''
+    """
     Moving average of the global velocity vector ; displayed with "moving average of center of masses" as the vector's tail
-    '''
-
+    """
     def compute_metric_6(self, ):
         if len(self.metric_5_stack) > 1:
             sum_dx = 0
@@ -234,7 +269,8 @@ class SWARMMetrics(object):
 
         figure1, axs = plt.subplots(2, 2, figsize=(12, 8), gridspec_kw={'width_ratios': [1, 1], 'height_ratios': [1, 1]})
         plt.subplots_adjust(left=0.1, bottom=0.1, right=0.9, top=0.9, wspace=0.35, hspace=0.40)
-        figure1.suptitle('title_of_group_of_graphs')
+        figure1.suptitle('Online metrics', size=22)
+        figure1.canvas.set_window_title('Online swarm metrics')
 
         axs[0, 0].set_title('Centers of mass (x,y)')
         axs[0, 0].set(xlabel='Frames', ylabel='x(Orange),y(green)')

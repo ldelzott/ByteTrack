@@ -67,7 +67,7 @@ def plot_tracking(image, tlwhs, obj_ids, scores=None, frame_id=0, fps=0., ids2=N
                 (0, int(15 * text_scale)), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=2)
 
     if swarm_metrics is not None:
-        im = swarm_metrics.online_metrics_inputs(im, im_h, im_w, tlwhs, obj_ids)
+        im = swarm_metrics.online_metrics_inputs(im, im_h, im_w, tlwhs, obj_ids, frame_id=frame_id)
 
     if not disable_basic_hud:
         for i, tlwh in enumerate(tlwhs):

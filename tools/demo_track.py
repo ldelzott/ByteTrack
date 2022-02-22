@@ -127,6 +127,15 @@ def make_parser():
         action="store_true",
         help="Enable computation and rendering of swarm metric 6",
     )
+
+    parser.add_argument(
+        "--dump_metrics",
+        dest="dump_metrics",
+        default=False,
+        action="store_true",
+        help="Dump metric datas in the visualization folder",
+    )
+
     parser.add_argument(
         # "--path", default="./datasets/mot/train/MOT17-05-FRCNN/img1", help="path to images or video"
         "--dump_path", dest="dump", default=None, help="dump images and corresponding tracklets into specified folder"
@@ -298,7 +307,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
         save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (int(width), int(height))
     )
     tracker = BYTETracker(args, frame_rate=30)
-    swarm_metrics = SWARMMetrics(args)
+    swarm_metrics = SWARMMetrics(args, save_folder)
     timer = Timer()
     frame_id = 0
     results = []
