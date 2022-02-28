@@ -137,6 +137,21 @@ def make_parser():
     )
 
     parser.add_argument(
+        "--dump_tracking",
+        dest="dump_tracking",
+        default=False,
+        action="store_true",
+        help="Dump tracking datas in the visualization folder. Note that image dump is also required to visualize the data with labelme tool",
+    )
+    parser.add_argument(
+        "--dump_images",
+        dest="dump_images",
+        default=False,
+        action="store_true",
+        help="Dump non-annotated input images",
+    )
+
+    parser.add_argument(
         # "--path", default="./datasets/mot/train/MOT17-05-FRCNN/img1", help="path to images or video"
         "--dump_path", dest="dump", default=None, help="dump images and corresponding tracklets into specified folder"
     )
@@ -332,10 +347,17 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                         online_scores.append(t.score)
                 results.append((frame_id + 1, online_tlwhs, online_ids, online_scores))
                 timer.toc()
+                dump_annotated_images(img_info['raw_img'], online_tlwhs, online_ids, save_folder, current_time, args,
+                                      frame_id=frame_id + 1,
+                                      fps=1. / timer.average_time)
                 online_im = plot_tracking(img_info['raw_img'], online_tlwhs, online_ids, frame_id=frame_id + 1,
                                           fps=1. / timer.average_time, swarm_metrics=swarm_metrics, disable_basic_hud=args.hide_bounding_boxes)
             else:
                 timer.toc()
+                dump_annotated_images(img_info['raw_img'], online_tlwhs, online_ids, save_folder, current_time,
+                                          args,
+                                          frame_id=frame_id + 1,
+                                          fps=1. / timer.average_time)
                 online_im = img_info['raw_img']
             if args.save_result:
                 vid_writer.write(online_im)

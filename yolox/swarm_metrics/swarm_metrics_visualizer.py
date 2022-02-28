@@ -1,3 +1,12 @@
+# How the ant dataset size influenced the performance of the global system (try increasing the size of the dataset)
+#   -> Important : use test datas to test the accuracy of the system
+
+# How the system is working on other videos of ants (How good is the generalization with other ants videos ?)
+
+# Try using the system with vanilla COCO NN to detect sheep
+
+# (See email for modalities about the report schedule)
+
 from tinydb import TinyDB
 import numpy as np
 import matplotlib.pyplot as plt

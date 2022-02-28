@@ -53,7 +53,6 @@ class COCOeval_opt(COCOeval):
 
         # loop through images, area range, max detection number
         catIds = p.catIds if p.useCats else [-1]
-
         if p.iouType == "segm" or p.iouType == "bbox":
             computeIoU = self.computeIoU
         elif p.iouType == "keypoints":
