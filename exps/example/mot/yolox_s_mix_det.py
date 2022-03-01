@@ -45,7 +45,7 @@ class Exp(MyExp):
         )
 
         dataset = MOTDataset(
-            data_dir=os.path.join(get_yolox_datadir(), "ant_training_dataset"),
+            data_dir=os.path.join(get_yolox_datadir(), "ant_training_dataset_60"),
             json_file=self.train_ann,
 
             # Define the intermediate directory that contains the images ('' means no intermediate directory)
