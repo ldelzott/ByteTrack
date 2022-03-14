@@ -25,7 +25,7 @@ class Exp(MyExp):
         self.eval_interval = 1
         self.test_conf = 0.001
         self.nmsthre = 0.7
-        self.no_aug_epochs = 10
+        self.no_aug_epochs = 2
         self.basic_lr_per_img = 0.001 / 64.0
         self.warmup_epochs = 1
 
@@ -40,7 +40,7 @@ class Exp(MyExp):
         )
 
         dataset = MOTDataset(
-            data_dir=os.path.join(get_yolox_datadir(), "ant_training_dataset"),
+            data_dir=os.path.join(get_yolox_datadir(), "multi_ant_dataset_complete"),
             json_file=self.train_ann,
             name='',
             img_size=self.input_size,
@@ -95,7 +95,7 @@ class Exp(MyExp):
         from yolox.data import MOTDataset, ValTransform
 
         valdataset = MOTDataset(
-            data_dir=os.path.join(get_yolox_datadir(), "ant_training_dataset"),
+            data_dir=os.path.join(get_yolox_datadir(), "multi_ant_dataset_complete"),
             json_file=self.val_ann,
             img_size=self.test_size,
             name='',   # change to train when running on training set
