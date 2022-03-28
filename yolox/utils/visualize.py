@@ -49,7 +49,7 @@ def get_color(idx):
     return color
 
 
-def plot_tracking(image, tlwhs, obj_ids, scores=None, frame_id=0, fps=0., ids2=None, swarm_metrics=None, args=None, disable_basic_hud=False):
+def plot_tracking(image, tlwhs, obj_ids, scores=None, frame_id=0, timer=None, ids2=None, swarm_metrics=None, args=None, disable_basic_hud=False, disable_swarm_metric=False):
     im = np.ascontiguousarray(np.copy(image))
     im_h, im_w = im.shape[:2]
 
@@ -58,16 +58,20 @@ def plot_tracking(image, tlwhs, obj_ids, scores=None, frame_id=0, fps=0., ids2=N
     #text_scale = max(1, image.shape[1] / 1600.)
     #text_thickness = 2
     #line_thickness = max(1, int(image.shape[1] / 500.))
-    text_scale = 2
-    text_thickness = 2
-    line_thickness = 3
+    text_scale = 1
+    text_thickness = 1
+    line_thickness = 1
 
     #radius = max(5, int(im_w/140.))
-    cv2.putText(im, 'frame: %d fps: %.2f num: %d' % (frame_id, fps, len(tlwhs)),
-                (0, int(15 * text_scale)), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=2)
 
-    if swarm_metrics is not None:
-        im = swarm_metrics.online_metrics_inputs(im, im_h, im_w, tlwhs, obj_ids, frame_id=frame_id)
+
+    if (swarm_metrics is not None) and not disable_swarm_metric:
+        im = swarm_metrics.online_metrics_inputs(im, im_h, im_w, tlwhs, obj_ids, frame_id=frame_id, timer=timer)
+    else:
+        timer.toc()
+        fps = 1./timer.average_time
+        cv2.putText(im, 'frame: %d fps: %.2f num: %d' % (frame_id, fps, len(tlwhs)),
+                (0, int(30 * text_scale)), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=2)
 
     if not disable_basic_hud:
         for i, tlwh in enumerate(tlwhs):

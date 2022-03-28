@@ -25,12 +25,12 @@ class Exp(MyExp):
         self.input_size = (1280, 1280) # The values in the tuple could be restrained to multiples of 32
         self.test_size = (1280, 1280)
         self.random_size = (12, 26)
-        self.max_epoch = 10
+        self.max_epoch = 20
         self.print_interval = 20
         self.eval_interval = 1 # Note : precision=tp/(tp+fp) ; recall=tp/(tp+fn) https://deshanadesai.github.io/notes/Evaluation-of-Results-using-Mean-Avg-Precision ------  https://jonathan-hui.medium.com/map-mean-average-precision-for-object-detection-45c121a31173
         self.test_conf = 0.001 # See the following link to modify the max. detections allowed when computing the evaluation metric during training: https://stackoverflow.com/questions/52839368/understanding-coco-evaluation-maximum-detections
         self.nmsthre = 0.7
-        self.no_aug_epochs = 2 # Those augmented epochs are launched at the epoch "max_epoch-no_aug_epochs"
+        self.no_aug_epochs = 5 # Those augmented epochs are launched at the epoch "max_epoch-no_aug_epochs"
         self.basic_lr_per_img = 0.001 / 64.0
         self.warmup_epochs = 1
 
@@ -45,7 +45,7 @@ class Exp(MyExp):
         )
 
         dataset = MOTDataset(
-            data_dir=os.path.join(get_yolox_datadir(), "ant_training_dataset_270"),
+            data_dir=os.path.join(get_yolox_datadir(), "multi_ant_dataset_complete"),
             json_file=self.train_ann,
 
             # Define the intermediate directory that contains the images ('' means no intermediate directory)
@@ -102,7 +102,7 @@ class Exp(MyExp):
         from yolox.data import MOTDataset, ValTransform
 
         valdataset = MOTDataset(
-            data_dir=os.path.join(get_yolox_datadir(), "ant_training_dataset_270"),
+            data_dir=os.path.join(get_yolox_datadir(), "multi_ant_dataset_complete"),
             json_file=self.val_ann,
             img_size=self.test_size,
             name='',

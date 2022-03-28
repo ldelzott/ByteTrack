@@ -35,16 +35,21 @@ class SWARMMetrics(object):
         self.figures = []
         self.launch_graphs()
 
-    def online_metrics_inputs(self, im, im_h, im_w, tlwhs, obj_ids, frame_id=0):
+    def online_metrics_inputs(self, im, im_h, im_w, tlwhs, obj_ids, frame_id=0, timer=None):
         self.tracking_datas.append([im, [im_w, im_h], tlwhs, obj_ids])
         self.frame_id = frame_id
-
-        self.select_online_metrics()
+        self.select_online_metrics(timer, frame_id, len(tlwhs))
         self.dump_metrics()
         self.stack_trim()
-
         # Return an annotated image
         return self.tracking_datas[-1][0]
+
+    def add_hud_infos(self, timer, frame_id, objects_count):
+        timer.toc()
+        text_scale = 1
+        fps = 1. / timer.average_time
+        cv2.putText(self.tracking_datas[-1][0], 'frame: %d fps: %.2f num: %d' % (frame_id, fps, objects_count),
+                    (0, int(30 * text_scale)), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=2)
 
     def dump_metrics(self):
         if not self.args.dump_metrics:
@@ -72,9 +77,6 @@ class SWARMMetrics(object):
         dump_swarm_metrics(self.visualization_folder, self.frame_id,  metric_1, metric_2, metric_5, metric_6)
 
 
-
-
-
     """
         The various queues used in SWARMMetrics are limited in size: 'stack_trim' is used to remove the oldest item 
         of a queues when his maximum size is reached.
@@ -99,24 +101,31 @@ class SWARMMetrics(object):
         if len(self.metric_6_graph) > self.max_graph_size:
             self.metric_6_graph.popleft()
 
-    def select_online_metrics(self, ):
+    def select_online_metrics(self, timer, frame_id, objects_count):
         # Add here additional metrics
         # Note that metric_2 require metric_1: see compute_metric_1() function
         # Same comment for metric_4 : see compute_metric_3() function
         # Same comment for metric_5 : see compute_metric_3() function
+        # In the current configuration (metric 1 to 6), the computation time for ~100 detected objects
+        # is around 2 ms. The drawing task takes around 70ms per frame to complete.
+
+        #t0 = time.time()
         if self.args.swarm_metric_1:
             self.compute_metric_1()
         if self.args.swarm_metric_3:
             self.compute_metric_3()
         if self.args.swarm_metric_6:
             self.compute_metric_6()
-        self.update_graphs()
+        #t1 = time.time()-t0
+        #print("Metric computation elapsed time: ", t1)
+
+        self.update_graphs(timer, frame_id, objects_count)
 
     """
         'Immediate' center of mass location
     """
     def compute_metric_1(self, ):
-        sum_mass = 0
+        sum_mass = 0.000001
         sum_x = 0
         sum_y = 0
         # from https://stackoverflow.com/questions/12801400/find-the-center-of-mass-of-points
@@ -185,10 +194,10 @@ class SWARMMetrics(object):
                         sum_velocity_vector_y += y_delta
 
                         color = get_color(abs(obj_id_previous))
-                        cv2.line(self.tracking_datas[-1][0], center_current, vector_tip, color, 3)
-                        cv2.circle(self.tracking_datas[-1][0], center_current, radius=3, color=(0, 255, 0), thickness=3)
+                        cv2.line(self.tracking_datas[-1][0], center_current, vector_tip, color, 2)
+                        cv2.circle(self.tracking_datas[-1][0], center_current, radius=1, color=(0, 255, 0), thickness=2)
             if fastest_entity[0] is not None:
-                cv2.circle(self.tracking_datas[-1][0], fastest_entity[2], radius=40, color=(0, 0, 255), thickness=2)
+                cv2.circle(self.tracking_datas[-1][0], fastest_entity[2], radius=10, color=(0, 0, 255), thickness=2)
             global_velocity_vector_tip = tuple(
                 map(int, (self.metric_1_stack[-1][0] + vector_scale * sum_velocity_vector_x / current_entity_number,
                           self.metric_1_stack[-1][1] + vector_scale * sum_velocity_vector_y / current_entity_number)))
@@ -224,7 +233,7 @@ class SWARMMetrics(object):
                                          + vector_scale * self.metric_6_stack[-1][1])))
             cv2.line(self.tracking_datas[-1][0], vector_tail, vector_tip, (0, 255, 0), 3)
 
-    def update_graphs(self):
+    def update_graphs(self, timer, frame_id, objects_count):
         self.frame_count += 1
         if self.frame_count >= 1:
             x_values = len(self.metric_1_graph)
@@ -255,12 +264,26 @@ class SWARMMetrics(object):
             self.figures[3][1][1].set_xdata(x_time)
             self.figures[3][1][1].set_ydata([y_location[1] for y_location in self.metric_6_graph])
 
-            self.figures[0][0].canvas.draw()
             self.figures[0][0].canvas.flush_events()
 
+            self.add_hud_infos(timer, frame_id, objects_count)
+
+            # https://stackoverflow.com/questions/53324068/a-faster-refresh-rate-with-plt-imshow
+            cv2.namedWindow('img', cv2.WINDOW_AUTOSIZE)
+            # Using the following instead yield smaller visualization window:
+            # cv2.namedWindow('img', cv2.WINDOW_NORMAL)
+
+            cv2.imshow("img", self.tracking_datas[-1][0])
+            cv2.waitKey(1)
+
+            """ Uncomment to show the output images using matplotlib (slow) (also uncomment in function 'launch_graphs()')
+            t0 = time.time()
             # The color profile need to be converted from BGR to RGB
             self.figures[4][0].imshow(cv2.cvtColor(self.tracking_datas[-1][0], cv2.COLOR_BGR2RGB))
+            t1 = time.time()-t0
+            print("imshow call duration: ", t1)
             time.sleep(0.05)
+            """
 
     def launch_graphs(self):
         # From https://www.delftstack.com/howto/matplotlib/how-to-plot-in-real-time-using-matplotlib/
@@ -305,12 +328,13 @@ class SWARMMetrics(object):
         line1_1_2, = axs[1, 1].plot(x1_1, y1_1, 'tab:red')
         self.figures.append([figure1, [line1_1_1, line1_1_2]])
 
-        figure2, ax = plt.subplots(1, 1, figsize=(16, 12), gridspec_kw={'width_ratios': [1], 'height_ratios': [1]})
+        """ Uncomment to create one additional figure for an image
+        figure2, ax = plt.subplots(1, 1, figsize=(14, 10), gridspec_kw={'width_ratios': [1], 'height_ratios': [1]})
         plt.subplots_adjust(left=0.040, bottom=0.0125, right=0.975, top=0.9875, wspace=0.025, hspace=0.0125)
         figure2.suptitle('Annotated output image')
         ax.set(xlabel='x', ylabel='y')
-        self.figures.append([plt, [None, None]])
-
+        self.figures.append([plt, figure2])
+        """
         # Image plot
 
         #self.figures.append([figure1, [line0_2_1, line0_2_2]])

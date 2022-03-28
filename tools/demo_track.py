@@ -86,6 +86,13 @@ def make_parser():
         help="Hide the bounding boxes in visualization datas (output video)",
     )
     parser.add_argument(
+        "--disable_swarm_metric",
+        dest="disable_swarm_metric",
+        default=False,
+        action="store_true",
+        help="Disable computation and rendering of swarm metric",
+    )
+    parser.add_argument(
         "--swarm_metric_1",
         dest="swarm_metric_1",
         default=False,
@@ -346,12 +353,16 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                         online_ids.append(tid)
                         online_scores.append(t.score)
                 results.append((frame_id + 1, online_tlwhs, online_ids, online_scores))
-                timer.toc()
-                dump_annotated_images(img_info['raw_img'], online_tlwhs, online_ids, save_folder, current_time, args,
-                                      frame_id=frame_id + 1,
-                                      fps=1. / timer.average_time)
+                #timer.toc()
+                #dump_annotated_images(img_info['raw_img'], online_tlwhs, online_ids, save_folder, current_time, args,
+                #                      frame_id=frame_id + 1,
+                #                      fps=1. / timer.average_time)
+                #online_im = plot_tracking(img_info['raw_img'], online_tlwhs, online_ids, frame_id=frame_id + 1,
+                                          #fps=1. / timer.average_time, swarm_metrics=swarm_metrics, disable_basic_hud=args.hide_bounding_boxes, disable_swarm_metric=args.disable_swarm_metric)
                 online_im = plot_tracking(img_info['raw_img'], online_tlwhs, online_ids, frame_id=frame_id + 1,
-                                          fps=1. / timer.average_time, swarm_metrics=swarm_metrics, disable_basic_hud=args.hide_bounding_boxes)
+                                         timer=timer, swarm_metrics=swarm_metrics,
+                                         disable_basic_hud=args.hide_bounding_boxes,
+                                         disable_swarm_metric=args.disable_swarm_metric)
             else:
                 timer.toc()
                 dump_annotated_images(img_info['raw_img'], online_tlwhs, online_ids, save_folder, current_time,
