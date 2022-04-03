@@ -43,41 +43,21 @@ def dump_non_annotated_images(image, save_folder, current_time, args, frame_id):
     print(current_time)
 
 
-def dump_swarm_metrics(visualization_folder, frame_id, metric_1, metric_2, metric_5, metric_6):
-    if metric_1 is not None:
-        metric_1_0 = metric_1[0]
-        metric_1_1 = metric_1[1]
-    else:
-        metric_1_0 = 'empty'
-        metric_1_1 = 'empty'
-
-    if metric_2 is not None:
-        metric_2_0 = metric_2[0]
-        metric_2_1 = metric_2[1]
-    else:
-        metric_2_0 = 'empty'
-        metric_2_1 = 'empty'
-
-    if metric_5 is not None:
-        metric_5_0 = metric_5[0]
-        metric_5_1 = metric_5[1]
-    else:
-        metric_5_0 = 'empty'
-        metric_5_1 = 'empty'
-
-    if metric_6 is not None:
-        metric_6_0 = metric_6[0]
-        metric_6_1 = metric_6[1]
-    else:
-        metric_6_0 = 'empty'
-        metric_6_1 = 'empty'
-
+def dump_swarm_metrics(visualization_folder, frame_id, metric_dump):
+    #TODO: Adding proper name to the metric when saving them into the JSON file.
     file_name = "metrics_dump.json"
     json_dump_file = TinyDB(os.path.join(visualization_folder, file_name))
-    json_dump_file.insert({'frame_id': frame_id, 'metric_1_0': metric_1_0, 'metric_1_1': metric_1_1,
-                           'metric_2_0': metric_2_0, 'metric_2_1': metric_2_1,
-                           'metric_5_0': metric_5_0, 'metric_5_1': metric_5_1,
-                           'metric_6_0': metric_6_0, 'metric_6_1': metric_6_1})
+    dump_dict = {}
+    dump_dict['frame_id'] = frame_id
+    for i in range(len(metric_dump)):
+        if metric_dump[i] is not None:
+            dump_dict['metric_' + str(i) + '_0'] = metric_dump[i][0]
+            dump_dict['metric_' + str(i) + '_1'] = metric_dump[i][1]
+        else:
+            dump_dict['metric_' + str(i) + '_0'] = 'empty'
+            dump_dict['metric_' + str(i) + '_1'] = 'empty'
+    json_dump_file.insert(dump_dict)
+
 
 
 def get_color(idx):
