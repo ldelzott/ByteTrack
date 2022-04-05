@@ -16,16 +16,16 @@ class Exp(MyExp):
         self.width = 1.25
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
         self.train_ann = "train.json"
-        self.val_ann = "validation.json"    # change to train.json when running on training set
+        self.val_ann = "train.json"    # change to validation.json when validation set is available
         self.input_size = (1280, 1280)
         self.test_size = (1280, 1280)
         self.random_size = (18, 32)
-        self.max_epoch = 10
+        self.max_epoch = 15
         self.print_interval = 20
-        self.eval_interval = 1
+        self.eval_interval = 3
         self.test_conf = 0.001
         self.nmsthre = 0.7
-        self.no_aug_epochs = 2
+        self.no_aug_epochs = 5
         self.basic_lr_per_img = 0.001 / 64.0
         self.warmup_epochs = 1
 
@@ -40,7 +40,7 @@ class Exp(MyExp):
         )
 
         dataset = MOTDataset(
-            data_dir=os.path.join(get_yolox_datadir(), "multi_ant_dataset_complete"),
+            data_dir=os.path.join(get_yolox_datadir(), "epucks_dataset_300"),
             json_file=self.train_ann,
             name='',
             img_size=self.input_size,
@@ -95,7 +95,7 @@ class Exp(MyExp):
         from yolox.data import MOTDataset, ValTransform
 
         valdataset = MOTDataset(
-            data_dir=os.path.join(get_yolox_datadir(), "multi_ant_dataset_complete"),
+            data_dir=os.path.join(get_yolox_datadir(), "epucks_dataset_300"),
             json_file=self.val_ann,
             img_size=self.test_size,
             name='',   # change to train when running on training set
