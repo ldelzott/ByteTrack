@@ -26,9 +26,9 @@ class SWARMMetrics(object):
         """
             metric_main_stack[0] = metric_1 : float_global_centers
             metric_main_stack[1] = metric_2 : float_mean_global_centers
-            metric_main_stack[2] = metric_3 : individual centers, velocity vectors and norms
-            metric_main_stack[3] = metric_3 : fastest_entity
-            metric_main_stack[4] = metric_3 : float_global_velocity_deltas
+            metric_main_stack[2] = metric_3 : individual centers, velocity vectors and norms ?
+            metric_main_stack[3] = metric_4 : fastest_entity
+            metric_main_stack[4] = metric_5 : float_global_velocity_deltas
             metric_main_stack[5] = metric_6 : float_mean_global_velocity_deltas
         """
         self.metric_main_stack = []
@@ -69,15 +69,6 @@ class SWARMMetrics(object):
 
         dump_swarm_metrics(self.visualization_folder, self.frame_id, metric_dump)
 
-    def draw_graphics(self):
-
-        # Drawing trails
-        trail_length = len(self.objects_trails)
-        if trail_length > 0:
-            for i in range(trail_length):
-                center = tuple(map(int, self.objects_trails[i][0]))
-                colour = get_color(abs(self.objects_trails[i][1]))
-                cv2.circle(self.tracking_datas[-1][0], center, radius=1, color=colour, thickness=-1)
 
     """
         The various queues used in SWARMMetrics are limited in size: 'stack_trim' is used to remove the oldest item 
@@ -107,14 +98,68 @@ class SWARMMetrics(object):
         # t0 = time.time()
         if self.args.swarm_metric_1:
             self.compute_metric_1_immediate_global_center()
+        if self.args.swarm_metric_2:
+            self.compute_metric_2_immediate_global_center_moving_average()
         if self.args.swarm_metric_3:
-            self.compute_metric_3_velocity_vectors()
+            self.compute_metric_3_and_4_and_5_velocity_vectors()
         if self.args.swarm_metric_6:
             self.compute_metric_6_global_velocity_vector_moving_average()
         # t1 = time.time()-t0
         # print("Metric computation elapsed time: ", t1)
-
+        self.draw_graphics()
         self.update_graphs(timer, frame_id, objects_count)
+
+    def draw_graphics(self):
+        # Drawing trails
+        trail_length = len(self.objects_trails)
+        if trail_length > 0:
+            for i in range(trail_length):
+                center = tuple(map(int, self.objects_trails[i][0]))
+                colour = get_color(abs(self.objects_trails[i][1]))
+                cv2.circle(self.tracking_datas[-1][0], center, radius=1, color=colour, thickness=-1)
+
+        # Draw metric 1 - global center
+        immediate_global_center = tuple(map(int, self.metric_main_stack[0][-1]))
+        cv2.circle(self.tracking_datas[-1][0], immediate_global_center, radius=5, color=(0, 0, 255), thickness=7)
+
+        # Draw metric 2 - mean global center
+        mean_global_center = tuple(map(int, self.metric_main_stack[1][-1]))
+        cv2.circle(self.tracking_datas[-1][0], mean_global_center, radius=5, color=(0, 255, 0), thickness=7)
+
+        # Draw metric 3 - velocity vectors of each moving entity
+        for entity in self.metric_main_stack[2][-1]:
+            entity_color = get_color(abs(entity[3]))
+            entity_center = tuple(map(int, entity[0]))
+            entity_velocity_vector_tip = [entity[0][0] + entity[1][0] * self.velocity_vector_scale, entity[0][1] + entity[1][1] * self.velocity_vector_scale]
+            entity_velocity_vector_tip = tuple(map(int, entity_velocity_vector_tip))
+            cv2.line(self.tracking_datas[-1][0], entity_center, entity_velocity_vector_tip, entity_color, 2)
+            cv2.circle(self.tracking_datas[-1][0], entity_center, radius=1, color=(0, 255, 0), thickness=2)
+
+        # Draw metric 4 - fastest entity
+        fastest_entity = self.metric_main_stack[3][-1]
+        if fastest_entity[0] is not None:
+            cv2.circle(self.tracking_datas[-1][0], fastest_entity[2], radius=10, color=(0, 0, 255), thickness=2)
+
+        # Draw metric 5 - global velocity
+        if self.metric_main_stack[4][-1] is not None:
+            global_velocity_vector_tip = tuple(
+                map(int, (
+                    self.metric_main_stack[0][-1][
+                        0] + self.velocity_vector_scale * self.metric_main_stack[4][-1][0],
+                    self.metric_main_stack[0][-1][
+                        1] + self.velocity_vector_scale * self.metric_main_stack[4][-1][1])))
+            cv2.line(self.tracking_datas[-1][0], immediate_global_center, global_velocity_vector_tip,
+                     (0, 0, 255), 3)
+
+        # Draw metric 6 - Mean global velocity
+        mean_global_velocity_deltas = self.metric_main_stack[5][-1]
+        if mean_global_velocity_deltas is not None:
+            vector_tail = mean_global_center
+            vector_tip = tuple(
+                map(int, (vector_tail[0] + self.velocity_vector_scale * self.metric_main_stack[5][-1][0],
+                          vector_tail[1] + self.velocity_vector_scale * self.metric_main_stack[5][-1][1])))
+            cv2.line(self.tracking_datas[-1][0], vector_tail, vector_tip, (0, 255, 0), 3)
+
 
     """
         'Immediate' center of mass location
@@ -133,10 +178,6 @@ class SWARMMetrics(object):
         float_immediate_global_center = [sum_x / sum_mass, sum_y / sum_mass]
         self.metric_main_stack[0].append(float_immediate_global_center)
         self.metric_graph_stack[0].append(float_immediate_global_center)
-        center = tuple(map(int, float_immediate_global_center))
-        cv2.circle(self.tracking_datas[-1][0], center, radius=5, color=(0, 0, 255), thickness=7)
-        if self.args.swarm_metric_2:
-            self.compute_metric_2_immediate_global_center_moving_average()
 
     """
         Moving average of the center masses locations over the last x=max_queue_size frames
@@ -155,17 +196,14 @@ class SWARMMetrics(object):
             else:
                 break
         float_mean_global_center = (sum_x / self.moving_average_items_number, sum_y / self.moving_average_items_number)
-        mean_center = tuple(map(int, float_mean_global_center))
         self.metric_main_stack[1].append(float_mean_global_center)
         self.metric_graph_stack[1].append(float_mean_global_center)
-        cv2.circle(self.tracking_datas[-1][0], mean_center, radius=5, color=(0, 255, 0), thickness=7)
 
     def find_object_center_and_velocity(self, tlwh_current, tlwh_previous, obj_id_previous):
         x1, y1, w1, h1 = tlwh_current
         x2, y2, w2, h2 = tlwh_previous
         center_current_float = [x1 + w1 / 2, y1 + h1 / 2]
         center_previous_float = [x2 + w2 / 2, y2 + h2 / 2]
-        self.objects_trails.append([center_current_float, obj_id_previous])
         center_current = tuple(map(int, center_current_float))
         x_delta_float = center_current_float[0] - center_previous_float[0]
         y_delta_float = center_current_float[1] - center_previous_float[1]
@@ -173,45 +211,19 @@ class SWARMMetrics(object):
         x_delta = int(x_delta_float)
         y_delta = int(y_delta_float)
 
-        vector_tip_float = [center_current_float[0] + x_delta_float * self.velocity_vector_scale,
-                            center_current_float[1] + y_delta_float * self.velocity_vector_scale]
-        vector_tip = tuple(map(int, vector_tip_float))
-
-        # Draw the trails
-        self.draw_graphics()
-
-        # Draw the object center and the object velocity vector
-        color = get_color(abs(obj_id_previous))
-        cv2.line(self.tracking_datas[-1][0], center_current, vector_tip, color, 2)
-        cv2.circle(self.tracking_datas[-1][0], center_current, radius=1, color=(0, 255, 0), thickness=2)
-        self.metric_main_stack[2][-1].append([center_current_float, norm, [x_delta_float, y_delta_float]])
+        self.objects_trails.append([center_current_float, obj_id_previous])
+        self.metric_main_stack[2][-1].append([center_current_float, [x_delta_float, y_delta_float], norm, obj_id_previous])
         return center_current, norm, x_delta, y_delta
 
     def find_global_velocity_vector(self, sum_velocity_vector_x, sum_velocity_vector_y, current_entity_number):
         if current_entity_number > 0:
-            global_velocity_vector_tip = tuple(
-                map(int, (
-                    self.metric_main_stack[0][-1][
-                        0] + self.velocity_vector_scale * sum_velocity_vector_x / current_entity_number,
-                    self.metric_main_stack[0][-1][
-                        1] + self.velocity_vector_scale * sum_velocity_vector_y / current_entity_number)))
-
-            if self.args.swarm_metric_5 and self.args.swarm_metric_1:
-                instantaneous_center_of_masses = tuple(
-                    map(int, (self.metric_main_stack[0][-1][0], self.metric_main_stack[0][-1][1])))
-
-                # Draw the global velocity vector on top of the instantaneous center of mass.
-                cv2.line(self.tracking_datas[-1][0], instantaneous_center_of_masses, global_velocity_vector_tip,
-                         (0, 0, 255), 3)
-
-                # Store the global velocity vector of the current frame into the corresponding graph stack & main stack.
-                float_global_velocity_deltas = [sum_velocity_vector_x / current_entity_number,
-                                                sum_velocity_vector_y / current_entity_number]
-                self.metric_main_stack[4].append(float_global_velocity_deltas)
-                self.metric_graph_stack[2].append(float_global_velocity_deltas)
+            # Store the global velocity vector of the current frame into the corresponding graph stack & main stack.
+            float_global_velocity_deltas = [sum_velocity_vector_x / current_entity_number, sum_velocity_vector_y / current_entity_number]
+            self.metric_main_stack[4].append(float_global_velocity_deltas)
+            self.metric_graph_stack[2].append(float_global_velocity_deltas)
         else:
             self.metric_main_stack[4].append(None)
-            self.metric_graph_stack[2].append((0, 0))
+            self.metric_graph_stack[2].append((0, 0)) # TODO null velocities should be distinct from non available datas
 
 
     """
@@ -221,7 +233,7 @@ class SWARMMetrics(object):
         metric_5 compute a global velocity vector; the tail of that vector is given by the inst. center of masse.
     """
 
-    def compute_metric_3_velocity_vectors(self, ):
+    def compute_metric_3_and_4_and_5_velocity_vectors(self, ):
         sum_velocity_vector_x = 0
         sum_velocity_vector_y = 0
         fastest_entity = [None, 0, [0, 0]]
@@ -240,15 +252,10 @@ class SWARMMetrics(object):
                                                                                                       obj_id_previous)
                         sum_velocity_vector_x += x_delta
                         sum_velocity_vector_y += y_delta
-
-                        if self.args.swarm_metric_4 and norm >= fastest_entity[1]:
+                        if norm >= fastest_entity[1]:
                             fastest_entity = obj_id_current, norm, center_current
 
-            if fastest_entity[0] is not None:
-                cv2.circle(self.tracking_datas[-1][0], fastest_entity[2], radius=10, color=(0, 0, 255), thickness=2)
-
-            self.find_global_velocity_vector(sum_velocity_vector_x, sum_velocity_vector_y, self.current_entity_number)
-
+        self.find_global_velocity_vector(sum_velocity_vector_x, sum_velocity_vector_y, self.current_entity_number)
         self.metric_main_stack[3].append(fastest_entity)
 
     """
@@ -259,7 +266,6 @@ class SWARMMetrics(object):
         if len(self.metric_main_stack[4]) > 1:
             sum_dx = 0
             sum_dy = 0
-            vector_scale = 2
             metric_5_stack_size = len(self.metric_main_stack[4])
             for _, deltas in enumerate(self.metric_main_stack[4]):
                 if deltas is not None:
@@ -269,11 +275,9 @@ class SWARMMetrics(object):
             float_mean_global_velocity_deltas = [sum_dx / metric_5_stack_size, sum_dy / metric_5_stack_size]
             self.metric_main_stack[5].append(float_mean_global_velocity_deltas)
             self.metric_graph_stack[3].append(float_mean_global_velocity_deltas)
-            vector_tail = tuple(map(int, (self.metric_main_stack[1][-1][0], self.metric_main_stack[1][-1][1])))
-            vector_tip = tuple(
-                map(int, (vector_tail[0] + vector_scale * self.metric_main_stack[5][-1][0], vector_tail[1]
-                          + vector_scale * self.metric_main_stack[5][-1][1])))
-            cv2.line(self.tracking_datas[-1][0], vector_tail, vector_tip, (0, 255, 0), 3)
+        else:
+            self.metric_main_stack[5].append(None)
+            self.metric_graph_stack[3].append([0, 0]) # TODO null velocities should be distinct from non available datas
 
     def update_graph_data(self, metric_graph, plot_id):
         x_values = len(metric_graph)
