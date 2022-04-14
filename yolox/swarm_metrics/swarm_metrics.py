@@ -1,4 +1,9 @@
 import numpy as np
+# Heatmap of the positions ?
+# Stitching tracks with each other
+# Metric database
+# Mean average of the fastest entity (keep the fastest among the last 7 ones)
+
 from yolox.swarm_metrics.swarm_metrics_utils import get_color, dump_swarm_metrics
 import cv2
 from collections import deque
@@ -10,12 +15,13 @@ import matplotlib.pyplot as plt
 class SWARMMetrics(object):
     def __init__(self, args, vis_folder):
         self.args = args
-        self.number_of_metric_queues = 6
+        self.number_of_metric_queues = 7
         self.number_of_graph_queues = 4
         self.max_trail_size = 8000
         self.current_entity_number = 0
-        self.moving_average_items_number = 5 # Should be below or equal to "max_queue_size"
-        self.max_queue_size = 7
+        self.moving_average_items_number = 5  # Should be below or equal to "max_queue_size"
+        self.moving_average_fastest_entity = 5  # Should be below or equal to "max_queue_size"
+        self.max_queue_size = 15
         self.max_graph_size = 40
         self.frame_count = 0
         self.frame_id = 0
@@ -30,6 +36,7 @@ class SWARMMetrics(object):
             metric_main_stack[3] = metric_4 : fastest_entity
             metric_main_stack[4] = metric_5 : float_global_velocity_deltas
             metric_main_stack[5] = metric_6 : float_mean_global_velocity_deltas
+            metric_main_stack[6] = metric_7 : mean_fastest_entity
         """
         self.metric_main_stack = []
         for i in range(self.number_of_metric_queues):
@@ -69,7 +76,6 @@ class SWARMMetrics(object):
 
         dump_swarm_metrics(self.visualization_folder, self.frame_id, metric_dump)
 
-
     """
         The various queues used in SWARMMetrics are limited in size: 'stack_trim' is used to remove the oldest item 
         of a queues when his maximum size is reached.
@@ -104,6 +110,7 @@ class SWARMMetrics(object):
             self.compute_metric_3_and_4_and_5_velocity_vectors()
         if self.args.swarm_metric_6:
             self.compute_metric_6_global_velocity_vector_moving_average()
+        self.compute_metric_7_mean_fastest_entity()
         # t1 = time.time()-t0
         # print("Metric computation elapsed time: ", t1)
         self.draw_graphics()
@@ -127,10 +134,11 @@ class SWARMMetrics(object):
         cv2.circle(self.tracking_datas[-1][0], mean_global_center, radius=5, color=(0, 255, 0), thickness=7)
 
         # Draw metric 3 - velocity vectors of each moving entity
-        for entity in self.metric_main_stack[2][-1]:
+        for entity in self.metric_main_stack[2][-1][1]:
             entity_color = get_color(abs(entity[3]))
             entity_center = tuple(map(int, entity[0]))
-            entity_velocity_vector_tip = [entity[0][0] + entity[1][0] * self.velocity_vector_scale, entity[0][1] + entity[1][1] * self.velocity_vector_scale]
+            entity_velocity_vector_tip = [entity[0][0] + entity[1][0] * self.velocity_vector_scale,
+                                          entity[0][1] + entity[1][1] * self.velocity_vector_scale]
             entity_velocity_vector_tip = tuple(map(int, entity_velocity_vector_tip))
             cv2.line(self.tracking_datas[-1][0], entity_center, entity_velocity_vector_tip, entity_color, 2)
             cv2.circle(self.tracking_datas[-1][0], entity_center, radius=1, color=(0, 255, 0), thickness=2)
@@ -138,7 +146,7 @@ class SWARMMetrics(object):
         # Draw metric 4 - fastest entity
         fastest_entity = self.metric_main_stack[3][-1]
         if fastest_entity[0] is not None:
-            cv2.circle(self.tracking_datas[-1][0], fastest_entity[2], radius=10, color=(0, 0, 255), thickness=2)
+            cv2.circle(self.tracking_datas[-1][0], fastest_entity[2], radius=15, color=(0, 0, 255), thickness=2)
 
         # Draw metric 5 - global velocity
         if self.metric_main_stack[4][-1] is not None:
@@ -151,7 +159,7 @@ class SWARMMetrics(object):
             cv2.line(self.tracking_datas[-1][0], immediate_global_center, global_velocity_vector_tip,
                      (0, 0, 255), 3)
 
-        # Draw metric 6 - Mean global velocity
+        # Draw metric 6 - mean global velocity
         mean_global_velocity_deltas = self.metric_main_stack[5][-1]
         if mean_global_velocity_deltas is not None:
             vector_tail = mean_global_center
@@ -160,6 +168,14 @@ class SWARMMetrics(object):
                           vector_tail[1] + self.velocity_vector_scale * self.metric_main_stack[5][-1][1])))
             cv2.line(self.tracking_datas[-1][0], vector_tail, vector_tip, (0, 255, 0), 3)
 
+        # Draw metric 7 - fastest entity
+        fastest_mean_entity = self.metric_main_stack[6][-1]
+        text_scale = 2
+        if fastest_mean_entity[0] is not None:
+            cv2.circle(self.tracking_datas[-1][0], tuple(map(int, fastest_mean_entity[2])), radius=10, color=(0, 255, 0), thickness=2)
+            cv2.putText(self.tracking_datas[-1][0], 'mean_fastest: %d' % (fastest_mean_entity[0]),
+                        (int(fastest_mean_entity[2][0]) + 20, int(fastest_mean_entity[2][1]) - 10),
+                        cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), thickness=1)
 
     """
         'Immediate' center of mass location
@@ -212,19 +228,21 @@ class SWARMMetrics(object):
         y_delta = int(y_delta_float)
 
         self.objects_trails.append([center_current_float, obj_id_previous])
-        self.metric_main_stack[2][-1].append([center_current_float, [x_delta_float, y_delta_float], norm, obj_id_previous])
+        self.metric_main_stack[2][-1][1].append(
+            [center_current_float, [x_delta_float, y_delta_float], norm, obj_id_previous])
         return center_current, norm, x_delta, y_delta
 
     def find_global_velocity_vector(self, sum_velocity_vector_x, sum_velocity_vector_y, current_entity_number):
         if current_entity_number > 0:
             # Store the global velocity vector of the current frame into the corresponding graph stack & main stack.
-            float_global_velocity_deltas = [sum_velocity_vector_x / current_entity_number, sum_velocity_vector_y / current_entity_number]
+            float_global_velocity_deltas = [sum_velocity_vector_x / current_entity_number,
+                                            sum_velocity_vector_y / current_entity_number]
             self.metric_main_stack[4].append(float_global_velocity_deltas)
             self.metric_graph_stack[2].append(float_global_velocity_deltas)
         else:
             self.metric_main_stack[4].append(None)
-            self.metric_graph_stack[2].append((0, 0)) # TODO null velocities should be distinct from non available datas
-
+            self.metric_graph_stack[2].append(
+                (0, 0))  # TODO null velocities should be distinct from non available datas
 
     """
         Raw velocity vectors 
@@ -239,7 +257,7 @@ class SWARMMetrics(object):
         fastest_entity = [None, 0, [0, 0]]
         tracks_records_number = len(self.tracking_datas)
         self.current_entity_number = len(self.tracking_datas[-1][2])
-        self.metric_main_stack[2].append([])
+        self.metric_main_stack[2].append([self.frame_id, []])
 
         if tracks_records_number >= 2:
             for i, tlwh_current in enumerate(self.tracking_datas[-1][2]):
@@ -277,7 +295,59 @@ class SWARMMetrics(object):
             self.metric_graph_stack[3].append(float_mean_global_velocity_deltas)
         else:
             self.metric_main_stack[5].append(None)
-            self.metric_graph_stack[3].append([0, 0]) # TODO null velocities should be distinct from non available datas
+            self.metric_graph_stack[3].append(
+                [0, 0])  # TODO null velocities should be distinct from non available datas
+
+    def average_last_known_norms_for_entity(self,
+                                            entity_data):  # [center_current_float, [x_delta_float, y_delta_float], norm, obj_id_previous]
+        known_norms = [None for i in range(self.moving_average_fastest_entity)]
+        final_average = None
+        i = 0
+        for entities_description_per_frame in reversed(self.metric_main_stack[2]):
+            if i >= self.moving_average_fastest_entity:
+                break
+            for entity_center_and_velocity in entities_description_per_frame[1]:
+                if entity_center_and_velocity[3] == entity_data[3]:
+                    known_norms[i] = entity_center_and_velocity[2]
+            i += 1
+        final_average = self.compute_average_on_sparse_list(known_norms)
+        return final_average
+
+    def compute_average_on_sparse_list(self, input_list):
+        sum = 0
+        none_count = 0
+        list_size = len(input_list)
+        for item in input_list:
+            if item is not None:
+                sum += item
+            else:
+                none_count += 1
+        return sum / (list_size - none_count)
+
+    def find_fastest_entity_and_his_position(self, average_list):
+        actual_best = 0
+        candidate_id = None
+        winner = [None, 0, [0, 0]]
+        if len(average_list) > 0:
+            for candidate in average_list:
+                if candidate[0] > actual_best:
+                    actual_best = candidate[0]
+                    candidate_id = candidate[1]
+
+        if len(self.metric_main_stack[2]) > 0:
+            for entity_center_and_velocity in self.metric_main_stack[2][-1][1]:
+                if entity_center_and_velocity[3] == candidate_id:
+                    winner = [candidate_id, actual_best, entity_center_and_velocity[0]]
+        return winner
+
+    def compute_metric_7_mean_fastest_entity(self, ):
+        norms_stack = []
+        if len(self.metric_main_stack[2]) > 1:
+            for entity_center_and_velocity in self.metric_main_stack[2][-1][1]:
+                norms_stack.append([self.average_last_known_norms_for_entity(entity_center_and_velocity),
+                                    entity_center_and_velocity[3]])
+        mean_fastest_entity = self.find_fastest_entity_and_his_position(norms_stack)
+        self.metric_main_stack[6].append(mean_fastest_entity)
 
     def update_graph_data(self, metric_graph, plot_id):
         x_values = len(metric_graph)
