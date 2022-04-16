@@ -15,12 +15,15 @@ import matplotlib.pyplot as plt
 class SWARMMetrics(object):
     def __init__(self, args, vis_folder):
         self.args = args
-        self.number_of_metric_queues = 7
+        self.number_of_metric_queues = 8
         self.number_of_graph_queues = 4
         self.max_trail_size = 8000
         self.current_entity_number = 0
         self.moving_average_items_number = 5  # Should be below or equal to "max_queue_size"
         self.moving_average_fastest_entity = 5  # Should be below or equal to "max_queue_size"
+        self.heatmap_threshold = 1
+        self.heatmap_blend_coefficient = 0.5
+        self.object_disk_size_in_heatmap = 90
         self.max_queue_size = 15
         self.max_graph_size = 40
         self.frame_count = 0
@@ -37,6 +40,7 @@ class SWARMMetrics(object):
             metric_main_stack[4] = metric_5 : float_global_velocity_deltas
             metric_main_stack[5] = metric_6 : float_mean_global_velocity_deltas
             metric_main_stack[6] = metric_7 : mean_fastest_entity
+            metric_main_stack[7] = metric_8 : heat map of positions
         """
         self.metric_main_stack = []
         for i in range(self.number_of_metric_queues):
@@ -62,6 +66,8 @@ class SWARMMetrics(object):
         text_scale = 1
         fps = 1. / timer.average_time
         cv2.putText(self.tracking_datas[-1][0], 'frame: %d fps: %.2f num: %d' % (frame_id, fps, objects_count),
+                    (0, int(30 * text_scale)), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=2)
+        cv2.putText(self.metric_main_stack[7][-1], 'frame: %d fps: %.2f num: %d' % (frame_id, fps, objects_count),
                     (0, int(30 * text_scale)), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=2)
 
     def dump_metrics(self):
@@ -111,12 +117,19 @@ class SWARMMetrics(object):
         if self.args.swarm_metric_6:
             self.compute_metric_6_global_velocity_vector_moving_average()
         self.compute_metric_7_mean_fastest_entity()
+        self.compute_metric_8_position_heatmap()
         # t1 = time.time()-t0
         # print("Metric computation elapsed time: ", t1)
         self.draw_graphics()
         self.update_graphs(timer, frame_id, objects_count)
 
     def draw_graphics(self):
+
+        # Draw metric 8 - heatmap
+        # https://docs.opencv.org/3.4/d5/dc4/tutorial_adding_images.html
+        if 1 >= self.heatmap_blend_coefficient >= 0:
+            self.tracking_datas[-1][0] = cv2.addWeighted(self.metric_main_stack[7][-1], self.heatmap_blend_coefficient, self.tracking_datas[-1][0], 1-self.heatmap_blend_coefficient, 0)
+
         # Drawing trails
         trail_length = len(self.objects_trails)
         if trail_length > 0:
@@ -176,6 +189,7 @@ class SWARMMetrics(object):
             cv2.putText(self.tracking_datas[-1][0], 'mean_fastest: %d' % (fastest_mean_entity[0]),
                         (int(fastest_mean_entity[2][0]) + 20, int(fastest_mean_entity[2][1]) - 10),
                         cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), thickness=1)
+
 
     """
         'Immediate' center of mass location
@@ -348,6 +362,21 @@ class SWARMMetrics(object):
                                     entity_center_and_velocity[3]])
         mean_fastest_entity = self.find_fastest_entity_and_his_position(norms_stack)
         self.metric_main_stack[6].append(mean_fastest_entity)
+
+    def compute_metric_8_position_heatmap(self,): # [center_current_float, [x_delta_float, y_delta_float], norm, obj_id_previous]
+        heatmap_mask = np.zeros_like(self.tracking_datas[-1][0][:, :, 0]).astype("uint8")
+        if len(self.metric_main_stack[2]) > 0:
+            for entity_center_and_velocity in self.metric_main_stack[2][-1][1]:
+                object_mask = np.zeros_like(self.tracking_datas[-1][0][:, :, 0]).astype("uint8")
+                cv2.circle(object_mask, tuple(map(int, entity_center_and_velocity[0])), self.object_disk_size_in_heatmap, 1, -1)
+                heatmap_mask[object_mask == 1] = 255
+
+        heatmap_mask = cv2.distanceTransform(heatmap_mask.astype(np.uint8), distanceType=cv2.DIST_L2, maskSize=5)
+        cv2.normalize(heatmap_mask, heatmap_mask, 0.0, 255.0, cv2.NORM_MINMAX)
+        heatmap_mask = np.uint8(heatmap_mask)
+        heatmap_output = cv2.applyColorMap(heatmap_mask, cv2.COLORMAP_JET)
+        self.metric_main_stack[7].append(heatmap_output)
+
 
     def update_graph_data(self, metric_graph, plot_id):
         x_values = len(metric_graph)
