@@ -329,7 +329,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
         save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (int(width), int(height))
     )
     tracker = BYTETracker(args, frame_rate=30)
-    swarm_metrics = SWARMMetrics(args, save_folder)
+    swarm_metrics = SWARMMetrics(args, save_folder, width, height)
     timer = Timer()
     frame_id = 0
     results = []

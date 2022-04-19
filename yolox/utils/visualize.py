@@ -9,7 +9,6 @@ __all__ = ["vis"]
 
 
 def vis(img, boxes, scores, cls_ids, conf=0.5, class_names=None):
-
     for i in range(len(boxes)):
         box = boxes[i]
         cls_id = int(cls_ids[i])
@@ -33,7 +32,7 @@ def vis(img, boxes, scores, cls_ids, conf=0.5, class_names=None):
         cv2.rectangle(
             img,
             (x0, y0 + 1),
-            (x0 + txt_size[0] + 1, y0 + int(1.5*txt_size[1])),
+            (x0 + txt_size[0] + 1, y0 + int(1.5 * txt_size[1])),
             txt_bk_color,
             -1
         )
@@ -49,29 +48,29 @@ def get_color(idx):
     return color
 
 
-def plot_tracking(image, tlwhs, obj_ids, scores=None, frame_id=0, timer=None, ids2=None, swarm_metrics=None, args=None, disable_basic_hud=False, disable_swarm_metric=False):
+def plot_tracking(image, tlwhs, obj_ids, scores=None, frame_id=0, timer=None, ids2=None, swarm_metrics=None, args=None,
+                  disable_basic_hud=False, disable_swarm_metric=False):
     im = np.ascontiguousarray(np.copy(image))
     im_h, im_w = im.shape[:2]
 
     top_view = np.zeros([im_w, im_w, 3], dtype=np.uint8) + 255
 
-    #text_scale = max(1, image.shape[1] / 1600.)
-    #text_thickness = 2
-    #line_thickness = max(1, int(image.shape[1] / 500.))
+    # text_scale = max(1, image.shape[1] / 1600.)
+    # text_thickness = 2
+    # line_thickness = max(1, int(image.shape[1] / 500.))
     text_scale = 1
     text_thickness = 2
     line_thickness = 3
 
-    #radius = max(5, int(im_w/140.))
-
+    # radius = max(5, int(im_w/140.))
 
     if (swarm_metrics is not None) and not disable_swarm_metric:
         im = swarm_metrics.online_metrics_inputs(im, im_h, im_w, tlwhs, obj_ids, frame_id=frame_id, timer=timer)
     else:
         timer.toc()
-        fps = 1./timer.average_time
+        fps = 1. / timer.average_time
         cv2.putText(im, 'frame: %d fps: %.2f num: %d' % (frame_id, fps, len(tlwhs)),
-                (0, int(30 * text_scale)), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=2)
+                    (0, int(30 * text_scale)), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=2)
 
     if not disable_basic_hud:
         for i, tlwh in enumerate(tlwhs):

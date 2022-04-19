@@ -5,6 +5,10 @@ import numpy as np
 # Mean average of the fastest entity (keep the fastest among the last 7 ones)
 
 from yolox.swarm_metrics.swarm_metrics_utils import get_color, dump_swarm_metrics
+from yolox.swarm_metrics.swarm_metrics_GUI import SWARMMetricsGUI
+import PySimpleGUI as sg
+import PIL
+from PIL import Image, ImageTk
 import cv2
 from collections import deque
 import numpy as np
@@ -13,7 +17,7 @@ import matplotlib.pyplot as plt
 
 
 class SWARMMetrics(object):
-    def __init__(self, args, vis_folder):
+    def __init__(self, args, vis_folder, width, height):
         self.args = args
         self.number_of_metric_queues = 8
         self.number_of_graph_queues = 4
@@ -21,8 +25,6 @@ class SWARMMetrics(object):
         self.current_entity_number = 0
         self.moving_average_items_number = 5  # Should be below or equal to "max_queue_size"
         self.moving_average_fastest_entity = 5  # Should be below or equal to "max_queue_size"
-        self.heatmap_threshold = 1
-        self.heatmap_blend_coefficient = 0.5
         self.object_disk_size_in_heatmap = 90
         self.max_queue_size = 15
         self.max_graph_size = 40
@@ -32,6 +34,7 @@ class SWARMMetrics(object):
         self.visualization_folder = vis_folder
         self.tracking_datas = deque(maxlen=self.max_queue_size)
         self.objects_trails = deque(maxlen=self.max_trail_size)
+        self.pySimpleGui = SWARMMetricsGUI(width, height)
         """
             metric_main_stack[0] = metric_1 : float_global_centers
             metric_main_stack[1] = metric_2 : float_mean_global_centers
@@ -51,6 +54,7 @@ class SWARMMetrics(object):
 
         self.figures = [[], []]
         self.launch_graphs()
+        self.init_control_gui()
 
     def online_metrics_inputs(self, im, im_h, im_w, tlwhs, obj_ids, frame_id=0, timer=None):
         self.tracking_datas.append([im, [im_w, im_h], tlwhs, obj_ids])
@@ -61,14 +65,6 @@ class SWARMMetrics(object):
         # Return an annotated image
         return self.tracking_datas[-1][0]
 
-    def add_hud_infos(self, timer, frame_id, objects_count):
-        timer.toc()
-        text_scale = 1
-        fps = 1. / timer.average_time
-        cv2.putText(self.tracking_datas[-1][0], 'frame: %d fps: %.2f num: %d' % (frame_id, fps, objects_count),
-                    (0, int(30 * text_scale)), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=2)
-        cv2.putText(self.metric_main_stack[7][-1], 'frame: %d fps: %.2f num: %d' % (frame_id, fps, objects_count),
-                    (0, int(30 * text_scale)), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=2)
 
     def dump_metrics(self):
         if not self.args.dump_metrics:
@@ -108,88 +104,17 @@ class SWARMMetrics(object):
         # is around 2 ms. The drawing task takes around 70ms per frame to complete.
 
         # t0 = time.time()
-        if self.args.swarm_metric_1:
-            self.compute_metric_1_immediate_global_center()
-        if self.args.swarm_metric_2:
-            self.compute_metric_2_immediate_global_center_moving_average()
-        if self.args.swarm_metric_3:
-            self.compute_metric_3_and_4_and_5_velocity_vectors()
-        if self.args.swarm_metric_6:
-            self.compute_metric_6_global_velocity_vector_moving_average()
+        self.compute_metric_1_immediate_global_center()
+        self.compute_metric_2_immediate_global_center_moving_average()
+        self.compute_metric_3_and_4_and_5_velocity_vectors()
+        self.compute_metric_6_global_velocity_vector_moving_average()
         self.compute_metric_7_mean_fastest_entity()
         self.compute_metric_8_position_heatmap()
         # t1 = time.time()-t0
         # print("Metric computation elapsed time: ", t1)
-        self.draw_graphics()
-        self.update_graphs(timer, frame_id, objects_count)
-
-    def draw_graphics(self):
-
-        # Draw metric 8 - heatmap
-        # https://docs.opencv.org/3.4/d5/dc4/tutorial_adding_images.html
-        if 1 >= self.heatmap_blend_coefficient >= 0:
-            self.tracking_datas[-1][0] = cv2.addWeighted(self.metric_main_stack[7][-1], self.heatmap_blend_coefficient, self.tracking_datas[-1][0], 1-self.heatmap_blend_coefficient, 0)
-
-        # Drawing trails
-        trail_length = len(self.objects_trails)
-        if trail_length > 0:
-            for i in range(trail_length):
-                center = tuple(map(int, self.objects_trails[i][0]))
-                colour = get_color(abs(self.objects_trails[i][1]))
-                cv2.circle(self.tracking_datas[-1][0], center, radius=1, color=colour, thickness=-1)
-
-        # Draw metric 1 - global center
-        immediate_global_center = tuple(map(int, self.metric_main_stack[0][-1]))
-        cv2.circle(self.tracking_datas[-1][0], immediate_global_center, radius=5, color=(0, 0, 255), thickness=7)
-
-        # Draw metric 2 - mean global center
-        mean_global_center = tuple(map(int, self.metric_main_stack[1][-1]))
-        cv2.circle(self.tracking_datas[-1][0], mean_global_center, radius=5, color=(0, 255, 0), thickness=7)
-
-        # Draw metric 3 - velocity vectors of each moving entity
-        for entity in self.metric_main_stack[2][-1][1]:
-            entity_color = get_color(abs(entity[3]))
-            entity_center = tuple(map(int, entity[0]))
-            entity_velocity_vector_tip = [entity[0][0] + entity[1][0] * self.velocity_vector_scale,
-                                          entity[0][1] + entity[1][1] * self.velocity_vector_scale]
-            entity_velocity_vector_tip = tuple(map(int, entity_velocity_vector_tip))
-            cv2.line(self.tracking_datas[-1][0], entity_center, entity_velocity_vector_tip, entity_color, 2)
-            cv2.circle(self.tracking_datas[-1][0], entity_center, radius=1, color=(0, 255, 0), thickness=2)
-
-        # Draw metric 4 - fastest entity
-        fastest_entity = self.metric_main_stack[3][-1]
-        if fastest_entity[0] is not None:
-            cv2.circle(self.tracking_datas[-1][0], fastest_entity[2], radius=15, color=(0, 0, 255), thickness=2)
-
-        # Draw metric 5 - global velocity
-        if self.metric_main_stack[4][-1] is not None:
-            global_velocity_vector_tip = tuple(
-                map(int, (
-                    self.metric_main_stack[0][-1][
-                        0] + self.velocity_vector_scale * self.metric_main_stack[4][-1][0],
-                    self.metric_main_stack[0][-1][
-                        1] + self.velocity_vector_scale * self.metric_main_stack[4][-1][1])))
-            cv2.line(self.tracking_datas[-1][0], immediate_global_center, global_velocity_vector_tip,
-                     (0, 0, 255), 3)
-
-        # Draw metric 6 - mean global velocity
-        mean_global_velocity_deltas = self.metric_main_stack[5][-1]
-        if mean_global_velocity_deltas is not None:
-            vector_tail = mean_global_center
-            vector_tip = tuple(
-                map(int, (vector_tail[0] + self.velocity_vector_scale * self.metric_main_stack[5][-1][0],
-                          vector_tail[1] + self.velocity_vector_scale * self.metric_main_stack[5][-1][1])))
-            cv2.line(self.tracking_datas[-1][0], vector_tail, vector_tip, (0, 255, 0), 3)
-
-        # Draw metric 7 - fastest entity
-        fastest_mean_entity = self.metric_main_stack[6][-1]
-        text_scale = 2
-        if fastest_mean_entity[0] is not None:
-            cv2.circle(self.tracking_datas[-1][0], tuple(map(int, fastest_mean_entity[2])), radius=10, color=(0, 255, 0), thickness=2)
-            cv2.putText(self.tracking_datas[-1][0], 'mean_fastest: %d' % (fastest_mean_entity[0]),
-                        (int(fastest_mean_entity[2][0]) + 20, int(fastest_mean_entity[2][1]) - 10),
-                        cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), thickness=1)
-
+        #self.draw_graphics()
+        self.update_graphs()
+        self.pySimpleGui.refresh_gui(timer, frame_id, objects_count)
 
     """
         'Immediate' center of mass location
@@ -363,12 +288,14 @@ class SWARMMetrics(object):
         mean_fastest_entity = self.find_fastest_entity_and_his_position(norms_stack)
         self.metric_main_stack[6].append(mean_fastest_entity)
 
-    def compute_metric_8_position_heatmap(self,): # [center_current_float, [x_delta_float, y_delta_float], norm, obj_id_previous]
+    def compute_metric_8_position_heatmap(
+            self, ):  # [center_current_float, [x_delta_float, y_delta_float], norm, obj_id_previous]
         heatmap_mask = np.zeros_like(self.tracking_datas[-1][0][:, :, 0]).astype("uint8")
         if len(self.metric_main_stack[2]) > 0:
             for entity_center_and_velocity in self.metric_main_stack[2][-1][1]:
                 object_mask = np.zeros_like(self.tracking_datas[-1][0][:, :, 0]).astype("uint8")
-                cv2.circle(object_mask, tuple(map(int, entity_center_and_velocity[0])), self.object_disk_size_in_heatmap, 1, -1)
+                cv2.circle(object_mask, tuple(map(int, entity_center_and_velocity[0])),
+                           self.object_disk_size_in_heatmap, 1, -1)
                 heatmap_mask[object_mask == 1] = 255
 
         heatmap_mask = cv2.distanceTransform(heatmap_mask.astype(np.uint8), distanceType=cv2.DIST_L2, maskSize=5)
@@ -376,7 +303,6 @@ class SWARMMetrics(object):
         heatmap_mask = np.uint8(heatmap_mask)
         heatmap_output = cv2.applyColorMap(heatmap_mask, cv2.COLORMAP_JET)
         self.metric_main_stack[7].append(heatmap_output)
-
 
     def update_graph_data(self, metric_graph, plot_id):
         x_values = len(metric_graph)
@@ -386,18 +312,19 @@ class SWARMMetrics(object):
         self.figures[1][plot_id][1].set_xdata(x_time)
         self.figures[1][plot_id][1].set_ydata([y_location[1] for y_location in metric_graph])
 
-    def update_graphs(self, timer, frame_id, objects_count):
+    def update_graphs(self):
         self.frame_count += 1
         if self.frame_count >= 1:
             for i in range(self.number_of_graph_queues):
                 self.update_graph_data(self.metric_graph_stack[i], i)
             self.figures[0][0].canvas.flush_events()
-            self.add_hud_infos(timer, frame_id, objects_count)
 
             # https://stackoverflow.com/questions/53324068/a-faster-refresh-rate-with-plt-imshow
+            """
             cv2.namedWindow('img', cv2.WINDOW_AUTOSIZE)
             cv2.imshow("img", self.tracking_datas[-1][0])
             cv2.waitKey(1)
+            """
 
     def create_plot(self, gridx, gridy, title, xlabel, ylabel, curve_1_color, curve_2_color, axs, y_range):
         axs[gridx, gridy].set_title(title)
@@ -429,3 +356,9 @@ class SWARMMetrics(object):
                          [-20, 20])
 
         self.figures[0].append(figure1)
+
+    def init_control_gui(self):
+        self.pySimpleGui.set_swarm_metric(self)
+        self.pySimpleGui.init_gui()
+
+
