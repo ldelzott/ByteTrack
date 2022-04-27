@@ -10,6 +10,9 @@ class SWARMMetricsGUI(object):
     def __init__(self, width, height):
         self.swarm_metric = None
         self.sg_window = None
+        self.frame_ID = 0
+        self.framerate = 0
+        self.number_of_tracked_entity = 0
         self.width = width
         self.height = height
         self.heatmap_blend_coefficient = 0.5
@@ -28,7 +31,11 @@ class SWARMMetricsGUI(object):
 
     def init_gui(self):
         sg.theme('DefaultNoMoreNagging')
-        image_col = [[sg.Image(size=(self.width, self.height), key='-IMAGE-')]]
+        image_col = [[sg.Image(size=(self.width, self.height), key='-IMAGE-')],
+                     [sg.Text('Frame: ' + str(self.frame_ID) + ' ', key='-global_frameid-'),
+                      sg.Text('Frame rate: ' + str(round(self.framerate, 2)) + ' fps', key='-global_framerate-'),
+                      sg.Text('Tracked Object(s): ' + str(self.number_of_tracked_entity) + '',
+                              key='-global_tracked_number-')]]
         control_tab1 = [[sg.Text('', pad=(15, 0))],
                         [sg.Checkbox('Trails', default=True, key="-checkbox2-")],
                         [sg.Checkbox('Global center', default=True, key="-checkbox3-")],
@@ -43,7 +50,8 @@ class SWARMMetricsGUI(object):
                         [sg.Checkbox('Show global heatmap    ', default=False, key="-tab2_checkbox1-")],
                         [sg.Checkbox('Show individual heatmap', default=False, key="-tab2_checkbox2-")],
                         [sg.Text('   Blending factor', pad=(15, 0)),
-                         sg.Slider(range=(0, 1), default_value=0.5, disable_number_display=self.hide_sliders_values, resolution=0.05,
+                         sg.Slider(range=(0, 1), default_value=0.5, disable_number_display=self.hide_sliders_values,
+                                   resolution=0.05,
                                    orientation="horizontal", visible=True, key="-tab2_slider1-", size=(25, 10),
                                    border_width=1, pad=(0, 15))],
                         [sg.Text('   Mask size    ', pad=(15, 0)),
@@ -60,7 +68,8 @@ class SWARMMetricsGUI(object):
         control_tab3 = [[sg.Text('', pad=(15, 0))],
                         [sg.Checkbox('Show network areas', default=False, key="-tab3_checkbox1-")],
                         [sg.Text('   Blending factor', pad=(15, 0)),
-                         sg.Slider(range=(0, 1), default_value=0.5, disable_number_display=self.hide_sliders_values, resolution=0.05,
+                         sg.Slider(range=(0, 1), default_value=0.5, disable_number_display=self.hide_sliders_values,
+                                   resolution=0.05,
                                    orientation="horizontal", visible=True, key="-tab3_slider2-", size=(25, 10),
                                    border_width=1, pad=(0, 15))],
                         [sg.Text('   Radius       ', pad=(15, 0)),
@@ -80,15 +89,16 @@ class SWARMMetricsGUI(object):
                         [sg.Slider(range=(0, 200), default_value=self.swarm_metric.moving_average_global_center,
                                    disable_number_display=self.hide_sliders_values, resolution=1,
                                    orientation="horizontal", visible=True, key="-tab4_slider3-", size=(15, 10),
-                                   border_width=1, pad=(15, 15)),sg.Text('moving_average_global_center', pad=(5, 0))],
+                                   border_width=1, pad=(15, 15)), sg.Text('moving_average_global_center', pad=(5, 0))],
                         [sg.Slider(range=(0, 60), default_value=self.swarm_metric.velocity_vector_scale,
                                    disable_number_display=self.hide_sliders_values, resolution=1,
                                    orientation="horizontal", visible=True, key="-tab4_slider4-", size=(15, 10),
                                    border_width=1, pad=(15, 15)), sg.Text('velocity_vector_scale', pad=(5, 0))],
-                        [sg.Slider(range=(0, self.swarm_metric.max_trail_size), default_value=self.max_total_trail_points,
+                        [sg.Slider(range=(0, self.swarm_metric.max_trail_size),
+                                   default_value=self.max_total_trail_points,
                                    disable_number_display=self.hide_sliders_values, resolution=20,
                                    orientation="horizontal", visible=True, key="-tab4_slider5-", size=(15, 10),
-                                   border_width=1, pad=(15, 15)),sg.Text('max_total_trail_points', pad=(5, 0))]
+                                   border_width=1, pad=(15, 15)), sg.Text('max_total_trail_points', pad=(5, 0))]
                         ]
         tab_col = [[sg.TabGroup(
             [[sg.Tab('Metric Settings', control_tab1, border_width=0,
@@ -96,10 +106,14 @@ class SWARMMetricsGUI(object):
               sg.Tab('Heatmaps', control_tab2, element_justification='topleft'),
               sg.Tab('Networks', control_tab3, element_justification='topleft'),
               sg.Tab('Core Settings', control_tab4, element_justification='topleft')]],
-            tab_location='topleft')],[sg.Button('Resume', disabled=False),sg.Button('Pause', disabled=True),sg.Text('', pad=(35,0)),sg.Button('Abort & Close')]]
+            tab_location='topleft')],
+            [sg.Checkbox('Record the metrics in .JSON file', default=True, key="-tabgroup_checkbox1-")],
+            [sg.Button('Resume', disabled=False), sg.Button('Pause', disabled=True), sg.Text('', pad=(35, 0)),
+             sg.Button('Abort & Close')]]
         layout = [[sg.Column(image_col), sg.VSeperator(), sg.Column(tab_col)]]
 
-        self.sg_window = sg.Window('Swarm metrics on ByteTrack', layout, no_titlebar=True, alpha_channel=1, grab_anywhere=True,
+        self.sg_window = sg.Window('Swarm metrics on ByteTrack', layout, no_titlebar=True, alpha_channel=1,
+                                   grab_anywhere=True,
                                    margins=(0, 0))
 
     def set_swarm_metric(self, swarm_metric):
@@ -125,6 +139,7 @@ class SWARMMetricsGUI(object):
         self.manage_tab3(event, values)
         self.manage_tab2(event, values)
         self.manage_tab1(event, values, timer, frame_id, objects_count)
+        self.manage_tabgroup(event, values)
         self.manage_global(event, values)
 
         if event == sg.WIN_CLOSED or event == 'Abort & Close':
@@ -145,8 +160,20 @@ class SWARMMetricsGUI(object):
             self.sg_window['Resume'].update(disabled=False)
             self.sg_window['Pause'].update(disabled=True)
 
+        self.sg_window['-global_framerate-'].update(value='Frame rate: ' + str(round(self.framerate, 2)) + ' fps')
+        self.sg_window['-global_frameid-'].update(value='Frame: ' + str(self.frame_ID) + ' ')
+        self.sg_window['-global_tracked_number-'].update(
+            value='Tracked Object(s): ' + str(self.number_of_tracked_entity) + '')
+
+    def manage_tabgroup(self, event, values):
+        if values["-tabgroup_checkbox1-"] is True:
+            self.swarm_metric.database_dump = True
+        else:
+            self.swarm_metric.database_dump = False
+
     def manage_tab4(self, event, values):
-        if (values["-tab4_slider1-"] < values["-tab4_slider2-"]) or (values["-tab4_slider1-"] < values["-tab4_slider3-"]):
+        if (values["-tab4_slider1-"] < values["-tab4_slider2-"]) or (
+                values["-tab4_slider1-"] < values["-tab4_slider3-"]):
             self.sg_window['-tab4_slider2-'].update(value=int(values["-tab4_slider1-"]))
             self.sg_window['-tab4_slider3-'].update(value=int(values["-tab4_slider1-"]))
         self.swarm_metric.max_queue_size = int(values["-tab4_slider1-"])
@@ -199,7 +226,9 @@ class SWARMMetricsGUI(object):
         if values["-checkbox9-"] is True:
             self.draw_metric_7_mean_fastest_entity()
         if values["-checkbox10-"] is True:
-            self.add_hud_infos(timer, frame_id, objects_count)
+            self.add_hud_infos(timer, frame_id, objects_count, True)
+        else:
+            self.add_hud_infos(timer, frame_id, objects_count, False)
 
     def refresh_gui(self, timer, frame_id, objects_count):
         self.check_gui_event(timer, frame_id, objects_count)
@@ -228,7 +257,7 @@ class SWARMMetricsGUI(object):
     def draw_metric_9_individual_heatmap(self):
         if 1 >= self.heatmap_blend_coefficient >= 0:
             heatmap_non_normalized = \
-            self.swarm_metric.metric_persistent_stack[0][self.persistent_stack_0_get_index_of_ID()][1].copy()
+                self.swarm_metric.metric_persistent_stack[0][self.persistent_stack_0_get_index_of_ID()][1].copy()
             cv2.normalize(heatmap_non_normalized, heatmap_non_normalized, 0.0, 255.0, cv2.NORM_MINMAX)
             heatmap_mask = np.uint8(heatmap_non_normalized)
             heatmap_output = cv2.applyColorMap(heatmap_mask, cv2.COLORMAP_JET)
@@ -265,7 +294,7 @@ class SWARMMetricsGUI(object):
                 if i > self.max_total_trail_points:
                     break;
                 center = tuple(map(int, colored_point[0]))
-                colour = get_color(abs( colored_point[1]))
+                colour = get_color(abs(colored_point[1]))
                 i += 1
                 cv2.circle(self.swarm_metric.tracking_datas[-1][0], center, radius=1, color=colour, thickness=-1)
 
@@ -297,7 +326,7 @@ class SWARMMetricsGUI(object):
         # Draw metric 4 - fastest entity
         fastest_entity = self.swarm_metric.metric_main_stack[3][-1]
         if fastest_entity[0] is not None:
-            cv2.circle(self.swarm_metric.tracking_datas[-1][0], fastest_entity[2], radius=15, color=(0, 0, 255),
+            cv2.circle(self.swarm_metric.tracking_datas[-1][0], tuple(map(int,fastest_entity[2])), radius=15, color=(0, 0, 255),
                        thickness=2)
 
     def draw_metric_5_global_velocity(self):
@@ -339,13 +368,18 @@ class SWARMMetricsGUI(object):
                         (int(fastest_mean_entity[2][0]) + 20, int(fastest_mean_entity[2][1]) - 10),
                         cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), thickness=1)
 
-    def add_hud_infos(self, timer, frame_id, objects_count):
+    def add_hud_infos(self, timer, frame_id, objects_count, draw_on_image):
         timer.toc()
         text_scale = 1
-        fps = 1. / timer.average_time
-        cv2.putText(self.swarm_metric.tracking_datas[-1][0],
-                    'frame: %d fps: %.2f num: %d' % (frame_id, fps, objects_count), (0, int(30 * text_scale)),
-                    cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=2)
-        cv2.putText(self.swarm_metric.metric_main_stack[7][-1],
-                    'frame: %d fps: %.2f num: %d' % (frame_id, fps, objects_count), (0, int(30 * text_scale)),
-                    cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=2)
+        self.framerate = 1. / timer.average_time
+        self.frame_ID = frame_id
+        self.number_of_tracked_entity = objects_count
+        if not self.swarm_metric.paused and draw_on_image:
+            cv2.putText(self.swarm_metric.tracking_datas[-1][0],
+                        'frame: %d fps: %.2f num: %d' % (frame_id, self.framerate, objects_count),
+                        (0, int(30 * text_scale)),
+                        cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=2)
+            cv2.putText(self.swarm_metric.metric_main_stack[7][-1],
+                        'frame: %d fps: %.2f num: %d' % (frame_id, self.framerate, objects_count),
+                        (0, int(30 * text_scale)),
+                        cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=2)

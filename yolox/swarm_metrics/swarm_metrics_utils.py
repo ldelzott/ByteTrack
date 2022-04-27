@@ -42,8 +42,66 @@ def dump_non_annotated_images(image, save_folder, current_time, args, frame_id):
     print(save_folder)
     print(current_time)
 
+def dump_frame_swarm_metrics_in_database(swarm_metric):
+    file_name = "metrics_database.json"
+    json_dump_file = TinyDB(os.path.join(swarm_metric.visualization_folder, file_name))
 
-def dump_swarm_metrics(visualization_folder, frame_id, metric_dump):
+    global_immediate_metrics_table = json_dump_file.table('global_immediate_metrics')
+    global_mean_metrics_table = json_dump_file.table('global_mean_metrics')
+    individual_metrics_table = json_dump_file.table('individual_metrics')
+
+    dump_dict_immediate_metric = {}
+    dump_dict_mean_metric = {}
+    dump_list_individual_metric = []
+
+    dump_dict_immediate_metric['frameID'] = swarm_metric.frame_id
+    dump_dict_immediate_metric['global_center_x'] = swarm_metric.metric_main_stack[0][-1][0]
+    dump_dict_immediate_metric['global_center_y'] = swarm_metric.metric_main_stack[0][-1][1]
+    dump_dict_immediate_metric['global_velocity_delta_x'] = swarm_metric.metric_main_stack[4][-1][0]
+    dump_dict_immediate_metric['global_velocity_delta_y'] = swarm_metric.metric_main_stack[4][-1][1]
+    dump_dict_immediate_metric['fastest_entity_ID'] = swarm_metric.metric_main_stack[3][-1][0]
+    dump_dict_immediate_metric['fastest_entity_velocity_norm'] = swarm_metric.metric_main_stack[3][-1][1]
+    dump_dict_immediate_metric['fastest_entity_pos_x'] = swarm_metric.metric_main_stack[3][-1][2][0]
+    dump_dict_immediate_metric['fastest_entity_pos_y'] = swarm_metric.metric_main_stack[3][-1][2][1]
+
+    dump_dict_mean_metric['frameID'] = swarm_metric.frame_id
+    dump_dict_mean_metric['mean_global_center_x'] = swarm_metric.metric_main_stack[1][-1][0]
+    dump_dict_mean_metric['mean_global_center_y'] = swarm_metric.metric_main_stack[1][-1][1]
+    dump_dict_mean_metric['mean_global_velocity_delta_x'] = swarm_metric.metric_main_stack[4][-1][0]
+    dump_dict_mean_metric['mean_global_velocity_delta_y'] = swarm_metric.metric_main_stack[4][-1][1]
+    dump_dict_mean_metric['mean_fastest_entity_ID'] = swarm_metric.metric_main_stack[6][-1][0]
+    dump_dict_mean_metric['mean_fastest_entity_velocity_norm'] = swarm_metric.metric_main_stack[6][-1][1]
+    dump_dict_mean_metric['mean_fastest_entity_pos_x'] = swarm_metric.metric_main_stack[6][-1][2][0]
+    dump_dict_mean_metric['mean_fastest_entity_pos_y'] = swarm_metric.metric_main_stack[6][-1][2][1]
+    dump_dict_mean_metric['mean_global_center_window_size'] = swarm_metric.moving_average_global_center
+    dump_dict_mean_metric['mean_global_velocity_window_size'] = swarm_metric.moving_average_global_velocity
+    dump_dict_mean_metric['mean_fastest_entity_window_size'] = swarm_metric.moving_average_fastest_entity
+
+    for entity_data in swarm_metric.metric_main_stack[2][-1][1]:
+        dump_dict_individual_metric = {}
+        dump_dict_individual_metric['frameID'] = swarm_metric.frame_id
+        dump_dict_individual_metric['entity_id'] = entity_data[3]
+        dump_dict_individual_metric['entity_pos_x'] = entity_data[0][0]
+        dump_dict_individual_metric['entity_pos_y'] = entity_data[0][1]
+        dump_dict_individual_metric['entity_velocity_delta_x'] = entity_data[1][0]
+        dump_dict_individual_metric['entity_velocity_delta_y'] = entity_data[1][1]
+        dump_dict_individual_metric['entity_velocity_norm'] = entity_data[2]
+        dump_list_individual_metric.append(dump_dict_individual_metric)
+    """
+    dump_dict['frame_id'] = frame_id
+    for i in range(len(metric_dump)):
+        if metric_dump[i] is not None:
+            dump_dict['metric_' + str(i) + '_0'] = metric_dump[i][0]
+            dump_dict['metric_' + str(i) + '_1'] = metric_dump[i][1]
+        else:
+            dump_dict['metric_' + str(i) + '_0'] = 'empty'
+            dump_dict['metric_' + str(i) + '_1'] = 'empty'
+    """
+    global_immediate_metrics_table.insert(dump_dict_immediate_metric)
+    global_mean_metrics_table.insert(dump_dict_mean_metric)
+    individual_metrics_table.insert_multiple(dump_list_individual_metric)
+
+def dump_swarm_metrics(visualization_folder, frame_id, metric_dump, swarm_metric):
     #TODO: Adding proper name to the metric when saving them into the JSON file.
     file_name = "metrics_dump.json"
     json_dump_file = TinyDB(os.path.join(visualization_folder, file_name))
