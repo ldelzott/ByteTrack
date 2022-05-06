@@ -74,7 +74,7 @@ Assuming objects can communicate with their neighbors under a given distance, th
 <img src="assets/7_networks_map.gif" width="900"/>
 
 # Recording
-The process generate an output video. This output video shows the manipulations done in unpaused state in the visualization tool.
+The process generates an output video. This output video shows the manipulations done, in the unpaused state, in the visualization tool.
 [video](https://github.com/ldelzott/ByteTrack/blob/main/assets/output_4_cropped_and_resized.mp4)
 
 
