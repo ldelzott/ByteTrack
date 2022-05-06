@@ -1,37 +1,4 @@
-# Primitive swarm visualization tool on top of ByteTrack
-## Installation steps
-One should first clone this repository and install the depencies. 
-```shell
-git clone https://github.com/ldelzott/ByteTrack.git
-pip3 install folium==0.2.1
-pip3 install -r requirements.txt
-pip install tinydb
-pip install pysimplegui
-pip uninstall -y torch torchvision torchaudio
-pip install torch==1.7.1+cu110 torchvision==0.8.2+cu110 torchaudio==0.7.2 -f https://download.pytorch.org/whl/torch_stable.html
-python3 setup.py develop
-pip3 install cython; pip3 install 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI'
-pip3 install cython_bbox
 
-```
-One should download a pretrained YOLOX model. This model must be placed in ByteTrack/pretrained.
-```shell
-wget https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_x.pth
-```
-The train.py utility is used to train the model. The training is done on the dataset provided in ByteTrack/datasets/epucks_dataset_300
-```shell
-python3 /content/ByteTrack/tools/train.py -f /content/ByteTrack/exps/example/mot/yolox_x_mix_det.py -d 1 -b 2 --fp16 -o -c /content/ByteTrack/pretrained/yolox_x.pth
-```
-The visualization tool can be launched on the provided input video sequence aggregation-8-30fps-cropped.mp4
-```shell
-python3 /content/ByteTrack/tools/demo_track.py video --path /content/ByteTrack/videos/aggregation-8-30fps-cropped.mp4 -f /content/ByteTrack/exps/example/mot/yolox_x_mix_det.py -c /content/ByteTrack/YOLOX_outputs/yolox_x_mix_det/latest_ckpt.pth.tar --fp16 --fuse --save_result
-```
-## Functionnalities 
-# Graphs
-The graphs shows the value of metrics computed in real time on tracked objects of the input video. The current graphs range from 1 to 40 frames.   
-<img src="assets/MOT17-01-SDP.gif" width="400"/>
-# Configuration of the metrics
-<img src="assets/MOT17-01-SDP.gif" width="400"/>
 # ByteTrack
 
 [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/bytetrack-multi-object-tracking-by-1/multi-object-tracking-on-mot17)](https://paperswithcode.com/sota/multi-object-tracking-on-mot17?p=bytetrack-multi-object-tracking-by-1)
