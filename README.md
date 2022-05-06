@@ -30,7 +30,7 @@ python3 /content/ByteTrack/tools/demo_track.py video --path /content/ByteTrack/v
 # Graphs
 The graphs show the value of metrics computed in real-time on the tracked objects. The current graphs range from 1 to 40 frames.  
 
-<img src="assets/graphvisualization1.gif" width="600"/>
+<img src="assets/graphvisualization1.gif" width="700"/>
 
 # Configuration of the metrics
 ## Trails visualization
@@ -72,3 +72,9 @@ The position heatmap of each tracked entity can be displayed. The mask radius ca
 ## Networks map
 Assuming objects can communicate with their neighbors under a given distance, the network map highlights the groups of objects in the same "communication cluster".      
 <img src="assets/7_networks_map.gif" width="900"/>
+
+# Recording
+The process generate an output video. This output video shows the manipulations done in unpaused state in the visualization tool.
+[video](https://github.com/ldelzott/ByteTrack/blob/main/assets/output_4_cropped_and_resized.mp4)
+
+
