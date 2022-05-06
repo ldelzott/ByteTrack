@@ -1,11 +1,8 @@
-# How the ant dataset size influenced the performance of the global system (try increasing the size of the dataset)
-#   -> Important : use test datas to test the accuracy of the system
+"""
+The following code should allow one to use TinyDB to retrieve and graphs datas from the database.
+However, the current file need to be updated to correspond to the new database design.
 
-# How the system is working on other videos of ants (How good is the generalization with other ants videos ?)
-
-# Try using the system with vanilla COCO NN to detect sheep
-
-# (See email for modalities about the report schedule)
+"""
 
 from tinydb import TinyDB
 import numpy as np

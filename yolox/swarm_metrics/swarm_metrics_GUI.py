@@ -57,7 +57,7 @@ class SWARMMetricsGUI(object):
                         [sg.Text('   Mask size    ', pad=(15, 0)),
                          sg.Slider(range=(0, 250),
                                    default_value=self.swarm_metric.individual_object_disk_size_in_heatmap,
-                                   disable_number_display=self.hide_sliders_values, resolution=5,
+                                   disable_number_display=self.hide_sliders_values, resolution=1,
                                    orientation="horizontal", visible=True, key="-tab2_slider2-", size=(25, 10),
                                    border_width=1, pad=(15, 15))],
                         [sg.Text('   Choose one entity    ', pad=(15, 0)),
@@ -123,7 +123,6 @@ class SWARMMetricsGUI(object):
     This function will add new detected entity to the list of known entities. This is used, for example, when 
     selecting an entity in the combo menu of the tab 'heatmaps'
     """
-
     def generate_current_frame_entity_list(self):
         for detected_entity in self.swarm_metric.metric_persistent_stack[0]:
             if len(detected_entity) > 0:
@@ -195,7 +194,6 @@ class SWARMMetricsGUI(object):
 
         if values["-tab2_checkbox2-"] is True:
             self.draw_metric_9_individual_heatmap()
-            self.swarm_metric.individual_object_disk_size_in_heatmap = int(values["-tab2_slider2-"])
 
         if event == 'Select':
             self.selected_entity = values['-ENTITYSELECT-']
@@ -206,6 +204,7 @@ class SWARMMetricsGUI(object):
             self.new_entity_toggle = False
 
         self.heatmap_blend_coefficient = values["-tab2_slider1-"]
+        self.swarm_metric.individual_object_disk_size_in_heatmap = int(values["-tab2_slider2-"])
 
     def manage_tab1(self, event, values, timer, frame_id, objects_count):
 
@@ -256,16 +255,16 @@ class SWARMMetricsGUI(object):
 
     def draw_metric_9_individual_heatmap(self):
         if 1 >= self.heatmap_blend_coefficient >= 0:
-            heatmap_non_normalized = \
+            if self.persistent_stack_0_get_index_of_ID() is not None:
+                heatmap_non_normalized = \
                 self.swarm_metric.metric_persistent_stack[0][self.persistent_stack_0_get_index_of_ID()][1].copy()
-            cv2.normalize(heatmap_non_normalized, heatmap_non_normalized, 0.0, 255.0, cv2.NORM_MINMAX)
-            heatmap_mask = np.uint8(heatmap_non_normalized)
-            heatmap_output = cv2.applyColorMap(heatmap_mask, cv2.COLORMAP_JET)
-            self.swarm_metric.tracking_datas[-1][0] = cv2.addWeighted(heatmap_output,
-                                                                      self.heatmap_blend_coefficient,
-                                                                      self.swarm_metric.tracking_datas[-1][0],
-                                                                      1 - self.heatmap_blend_coefficient,
-                                                                      0)
+                cv2.normalize(heatmap_non_normalized, heatmap_non_normalized, 0.0, 255.0, cv2.NORM_MINMAX)
+                heatmap_mask = np.uint8(heatmap_non_normalized)
+                heatmap_output = cv2.applyColorMap(heatmap_mask, cv2.COLORMAP_JET)
+                self.swarm_metric.tracking_datas[-1][0] = cv2.addWeighted(heatmap_output,
+                                                                          self.heatmap_blend_coefficient,
+                                                                          self.swarm_metric.tracking_datas[-1][0],
+                                                                          1 - self.heatmap_blend_coefficient, 0)
 
     def draw_metric_8_networks(self):
         # Draw metric 8 - map of networks
@@ -326,12 +325,13 @@ class SWARMMetricsGUI(object):
         # Draw metric 4 - fastest entity
         fastest_entity = self.swarm_metric.metric_main_stack[3][-1]
         if fastest_entity[0] is not None:
-            cv2.circle(self.swarm_metric.tracking_datas[-1][0], tuple(map(int,fastest_entity[2])), radius=15, color=(0, 0, 255),
+            cv2.circle(self.swarm_metric.tracking_datas[-1][0], tuple(map(int, fastest_entity[2])), radius=15,
+                       color=(0, 0, 255),
                        thickness=2)
 
     def draw_metric_5_global_velocity(self):
         # Draw metric 5 - global velocity
-        if self.swarm_metric.metric_main_stack[4][-1] is not None:
+        if self.swarm_metric.metric_main_stack[4][-1][0] is not None:
             global_velocity_vector_tip = tuple(
                 map(int, (
                     self.swarm_metric.metric_main_stack[0][-1][
@@ -360,7 +360,6 @@ class SWARMMetricsGUI(object):
     def draw_metric_7_mean_fastest_entity(self):
         # Draw metric 7 - fastest entity
         fastest_mean_entity = self.swarm_metric.metric_main_stack[6][-1]
-        text_scale = 2
         if fastest_mean_entity[0] is not None:
             cv2.circle(self.swarm_metric.tracking_datas[-1][0], tuple(map(int, fastest_mean_entity[2])), radius=10,
                        color=(0, 255, 0), thickness=2)

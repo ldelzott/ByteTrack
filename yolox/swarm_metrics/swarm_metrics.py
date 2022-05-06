@@ -3,9 +3,10 @@ import numpy as np
 # Individual heatmap for each ID computed for a batch of frames, offline processing
 # Watershed to see the networks of connected entities per frame
 
+# answer
 # Rework the data dump
 
-from yolox.swarm_metrics.swarm_metrics_utils import get_color, dump_swarm_metrics, dump_frame_swarm_metrics_in_database
+from yolox.swarm_metrics.swarm_metrics_utils import dump_frame_swarm_metrics_in_database
 from yolox.swarm_metrics.swarm_metrics_GUI import SWARMMetricsGUI
 from yolox.tracking_utils.timer import Timer
 import cv2
@@ -68,7 +69,6 @@ class SWARMMetrics(object):
         self.tracking_datas.append([im, [im_w, im_h], tlwhs, obj_ids])
         self.frame_id = frame_id
         self.select_online_metrics(timer, frame_id, len(tlwhs))
-        self.dump_metrics()
         self.dump_metrics_in_database()
         self.stack_trim()
         # Return an annotated image
@@ -77,23 +77,6 @@ class SWARMMetrics(object):
     def dump_metrics_in_database(self):
         if self.database_dump:
             dump_frame_swarm_metrics_in_database(self)
-
-    def dump_metrics(self):
-        if not self.args.dump_metrics:
-            return
-        metric_dump = []
-        for i in range(self.number_of_graph_queues):
-            if len(self.metric_graph_stack[i]) == 0:
-                metric_dump.append(None)
-            else:
-                metric_dump.append(self.metric_graph_stack[i][-1])
-
-        dump_swarm_metrics(self.visualization_folder, self.frame_id, metric_dump, self)
-
-    """
-        The various queues used in SWARMMetrics are limited in size: 'stack_trim' is used to remove the oldest item 
-        of a queues when his maximum size is reached.
-    """
 
     def stack_trim(self):
         if len(self.tracking_datas) > self.max_queue_size:
@@ -107,18 +90,10 @@ class SWARMMetrics(object):
         for i in range(self.number_of_persistent_queues):
             if len(self.metric_persistent_stack[i]) > self.persistent_queue_size:
                 self.metric_persistent_stack[i].popleft()
-        if len(self.objects_trails) > self.max_trail_size * self.current_entity_number:  # The trail size is defined per object
+        if len(self.objects_trails) > self.max_trail_size * self.current_entity_number:
             self.objects_trails.popleft()
 
     def select_online_metrics(self, timer, frame_id, objects_count):
-        # Add here additional metrics
-        # Note that metric_2 require metric_1: see compute_metric_1() function
-        # Same comment for metric_4 : see compute_metric_3() function
-        # Same comment for metric_5 : see compute_metric_3() function
-        # In the current configuration (metric 1 to 6), the computation time for ~100 detected objects
-        # is around 2 ms. The drawing task takes around 70ms per frame to complete.
-
-        # t0 = time.time()
         self.verify_attributes_consistency()
         self.compute_metric_1_immediate_global_center()
         self.compute_metric_2_immediate_global_center_moving_average()
@@ -127,9 +102,6 @@ class SWARMMetrics(object):
         self.compute_metric_7_mean_fastest_entity()
         self.compute_metric_8_networks()
         self.compute_metric_9_individual_heatmaps()
-        # t1 = time.time()-t0
-        # print("Metric computation elapsed time: ", t1)
-        #self.draw_graphics()
         self.update_graphs()
         while 1:
             self.pySimpleGui.refresh_gui(timer, frame_id, objects_count)
@@ -143,10 +115,11 @@ class SWARMMetrics(object):
             self.moving_average_global_center = self.max_queue_size
         if self.moving_average_fastest_entity > self.max_queue_size:
             self.moving_average_fastest_entity = self.max_queue_size
-    """
-        'Immediate' center of mass location
-    """
 
+    """
+        'Immediate' center of mass location of each of the tracked entity, for the current frame.
+        Significant oscillations could occurs in the case of weak tracking. 
+    """
     def compute_metric_1_immediate_global_center(self, ):
         sum_mass = 0.000001
         sum_x = 0
@@ -162,9 +135,8 @@ class SWARMMetrics(object):
         self.metric_graph_stack[0].append(float_immediate_global_center)
 
     """
-        Moving average of the center masses locations over the last x=max_queue_size frames
+        Moving average of the center masses locations over the last x=moving_average_global_center frames
     """
-
     def compute_metric_2_immediate_global_center_moving_average(self, ):
         sum_x = 0
         sum_y = 0
@@ -184,42 +156,6 @@ class SWARMMetrics(object):
             float_mean_global_center = (0.0, 0.0)
         self.metric_main_stack[1].append(float_mean_global_center)
         self.metric_graph_stack[1].append(float_mean_global_center)
-
-    def find_object_center_and_velocity(self, tlwh_current, tlwh_previous, obj_id_previous):
-        x1, y1, w1, h1 = tlwh_current
-        x2, y2, w2, h2 = tlwh_previous
-        center_current_float = [x1 + w1 / 2, y1 + h1 / 2]
-        center_previous_float = [x2 + w2 / 2, y2 + h2 / 2]
-        center_current = tuple(map(int, center_current_float))
-        x_delta_float = center_current_float[0] - center_previous_float[0]
-        y_delta_float = center_current_float[1] - center_previous_float[1]
-        norm = x_delta_float * x_delta_float + y_delta_float * y_delta_float
-        x_delta = int(x_delta_float)
-        y_delta = int(y_delta_float)
-
-        self.objects_trails.append([center_current_float, obj_id_previous])
-        self.metric_main_stack[2][-1][1].append(
-            [center_current_float, [x_delta_float, y_delta_float], norm, obj_id_previous])
-        return center_current_float, norm, x_delta_float, y_delta_float
-
-    def find_global_velocity_vector(self, sum_velocity_vector_x, sum_velocity_vector_y, current_entity_number):
-        if current_entity_number > 0:
-            # Store the global velocity vector of the current frame into the corresponding graph stack & main stack.
-            float_global_velocity_deltas = [sum_velocity_vector_x / current_entity_number,
-                                            sum_velocity_vector_y / current_entity_number]
-            self.metric_main_stack[4].append(float_global_velocity_deltas)
-            self.metric_graph_stack[2].append(float_global_velocity_deltas)
-        else:
-            self.metric_main_stack[4].append(None)
-            self.metric_graph_stack[2].append(
-                (0, 0))  # TODO null velocities should be distinct from non available datas
-
-    """
-        Raw velocity vectors 
-        metric_3 display the velocity vector of each moving entity
-        metric_4 highlight the fastest moving entity on a given frame (require metric_3)
-        metric_5 compute a global velocity vector; the tail of that vector is given by the inst. center of masse.
-    """
 
     def compute_metric_3_and_4_and_5_velocity_vectors(self, ):
         sum_velocity_vector_x = 0
@@ -246,10 +182,35 @@ class SWARMMetrics(object):
         self.find_global_velocity_vector(sum_velocity_vector_x, sum_velocity_vector_y, self.current_entity_number)
         self.metric_main_stack[3].append(fastest_entity)
 
+    def find_object_center_and_velocity(self, tlwh_current, tlwh_previous, obj_id_previous):
+        x1, y1, w1, h1 = tlwh_current
+        x2, y2, w2, h2 = tlwh_previous
+        center_current_float = [x1 + w1 / 2, y1 + h1 / 2]
+        center_previous_float = [x2 + w2 / 2, y2 + h2 / 2]
+        x_delta_float = center_current_float[0] - center_previous_float[0]
+        y_delta_float = center_current_float[1] - center_previous_float[1]
+        norm = x_delta_float * x_delta_float + y_delta_float * y_delta_float
+
+        self.objects_trails.append([center_current_float, obj_id_previous])
+        self.metric_main_stack[2][-1][1].append(
+            [center_current_float, [x_delta_float, y_delta_float], norm, obj_id_previous])
+        return center_current_float, norm, x_delta_float, y_delta_float
+
+    def find_global_velocity_vector(self, sum_velocity_vector_x, sum_velocity_vector_y, current_entity_number):
+        if current_entity_number > 0:
+            # Store the global velocity vector of the current frame into the corresponding graph stack & main stack.
+            float_global_velocity_deltas = [sum_velocity_vector_x / current_entity_number,
+                                            sum_velocity_vector_y / current_entity_number]
+            self.metric_main_stack[4].append(float_global_velocity_deltas)
+            self.metric_graph_stack[2].append(float_global_velocity_deltas)
+        else:
+            self.metric_main_stack[4].append([None,None])
+            self.metric_graph_stack[2].append(
+                (0, 0))  # TODO null velocities should be distinct from non available datas
+
     """
     Moving average of the global velocity vector ; displayed with "moving average of center of masses" as the vector's tail
     """
-
     def compute_metric_6_global_velocity_vector_moving_average(self, ):
         if len(self.metric_main_stack[4]) > 1:
             sum_dx = 0
@@ -258,7 +219,7 @@ class SWARMMetrics(object):
             for _, deltas in enumerate(self.metric_main_stack[4]):
                 if i > self.moving_average_global_velocity:
                     break
-                if deltas is not None:
+                if deltas[0] is not None:
                     dx, dy = deltas
                     sum_dx += dx
                     sum_dy += dy
@@ -271,14 +232,24 @@ class SWARMMetrics(object):
             self.metric_graph_stack[3].append(
                 [0, 0])  # TODO null velocities should be distinct from non available datas
 
-    def average_last_known_norms_for_entity(self,
-                                            entity_data):  # [center_current_float, [x_delta_float, y_delta_float], norm, obj_id_previous]
+    def compute_metric_7_mean_fastest_entity(self, ):
+        norms_stack = []
+        if len(self.metric_main_stack[2]) > 1:
+            for entity_center_and_velocity in self.metric_main_stack[2][-1][1]:
+                norms_stack.append([self.average_last_known_norms_for_entity(entity_center_and_velocity),
+                                    entity_center_and_velocity[3]])
+        mean_fastest_entity = self.find_fastest_entity_and_his_position(norms_stack)
+        self.metric_main_stack[6].append(mean_fastest_entity)
+
+    def average_last_known_norms_for_entity(self,entity_data):
         known_norms = [None for i in range(self.moving_average_fastest_entity)]
-        final_average = None
         i = 0
         for entities_description_per_frame in reversed(self.metric_main_stack[2]):
             if i >= self.moving_average_fastest_entity:
                 break
+
+            # The entries in entities_description_per_frame[1] are
+            # [center_current_float, [x_delta_float, y_delta_float], norm, obj_id_previous]
             for entity_center_and_velocity in entities_description_per_frame[1]:
                 if entity_center_and_velocity[3] == entity_data[3]:
                     known_norms[i] = entity_center_and_velocity[2]
@@ -316,17 +287,7 @@ class SWARMMetrics(object):
                     winner = [candidate_id, actual_best, entity_center_and_velocity[0]]
         return winner
 
-    def compute_metric_7_mean_fastest_entity(self, ):
-        norms_stack = []
-        if len(self.metric_main_stack[2]) > 1:
-            for entity_center_and_velocity in self.metric_main_stack[2][-1][1]:
-                norms_stack.append([self.average_last_known_norms_for_entity(entity_center_and_velocity),
-                                    entity_center_and_velocity[3]])
-        mean_fastest_entity = self.find_fastest_entity_and_his_position(norms_stack)
-        self.metric_main_stack[6].append(mean_fastest_entity)
-
-    def compute_metric_8_networks(
-            self, ):  # [center_current_float, [x_delta_float, y_delta_float], norm, obj_id_previous]
+    def compute_metric_8_networks(self, ):
         heatmap_mask = np.zeros_like(self.tracking_datas[-1][0][:, :, 0]).astype("uint8")
         if len(self.metric_main_stack[2]) > 0:
             for entity_center_and_velocity in self.metric_main_stack[2][-1][1]:
@@ -334,6 +295,11 @@ class SWARMMetrics(object):
                 cv2.circle(object_mask, tuple(map(int, entity_center_and_velocity[0])),
                            self.object_disk_size_in_heatmap, 1, -1)
                 heatmap_mask[object_mask == 1] = 1
+
+        # Uncomment to visualize the network masks
+        #cv2.namedWindow('img', cv2.WINDOW_AUTOSIZE)
+        #cv2.imshow("img", heatmap_mask*255)
+        #cv2.waitKey(1)
         self.metric_main_stack[7].append(heatmap_mask)
 
     def compute_metric_9_individual_heatmaps(self):
@@ -355,7 +321,6 @@ class SWARMMetrics(object):
             else:
                 self.metric_persistent_stack[0].append([current_obj_id_and_mask[0], np.zeros_like(self.tracking_datas[-1][0][:, :, 0]).astype("float")])
 
-
     def is_ID_already_in_stack_0(self, obj_id):
         i = 0
         if len(self.metric_persistent_stack[0])>0:
@@ -364,7 +329,6 @@ class SWARMMetrics(object):
                     return True, i
                 i+=1
         return False, i
-
 
     def update_graph_data(self, metric_graph, plot_id):
         x_values = len(metric_graph)

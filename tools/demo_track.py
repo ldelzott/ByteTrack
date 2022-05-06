@@ -8,7 +8,6 @@ from yolox.data.data_augment import preproc
 from yolox.exp import get_exp
 from yolox.utils import fuse_model, get_model_info, postprocess, vis
 from yolox.utils.visualize import plot_tracking
-from yolox.swarm_metrics.swarm_metrics_utils import dump_annotated_images, dump_non_annotated_images
 from yolox.swarm_metrics.swarm_metrics import SWARMMetrics
 from yolox.tracker.byte_tracker import BYTETracker
 from yolox.tracking_utils.timer import Timer
@@ -79,11 +78,11 @@ def make_parser():
         help="Using TensorRT model for testing.",
     )
     parser.add_argument(
-        "--hide_bounding_boxes",
-        dest="hide_bounding_boxes",
+        "--show_bounding_boxes_on_output",
+        dest="show_bounding_boxes_on_output",
         default=False,
         action="store_true",
-        help="Hide the bounding boxes in visualization datas (output video)",
+        help="Show the bounding boxes in visualization datas (output video)",
     )
     parser.add_argument(
         "--disable_swarm_metric",
@@ -92,76 +91,7 @@ def make_parser():
         action="store_true",
         help="Disable computation and rendering of swarm metric",
     )
-    parser.add_argument(
-        "--swarm_metric_1",
-        dest="swarm_metric_1",
-        default=False,
-        action="store_true",
-        help="Enable computation and rendering of swarm metric 1",
-    )
-    parser.add_argument(
-        "--swarm_metric_2",
-        dest="swarm_metric_2",
-        default=False,
-        action="store_true",
-        help="Enable computation and rendering of swarm metric 2",
-    )
-    parser.add_argument(
-        "--swarm_metric_3",
-        dest="swarm_metric_3",
-        default=False,
-        action="store_true",
-        help="Enable computation and rendering of swarm metric 3",
-    )
-    parser.add_argument(
-        "--swarm_metric_4",
-        dest="swarm_metric_4",
-        default=False,
-        action="store_true",
-        help="Enable computation and rendering of swarm metric 4",
-    )
-    parser.add_argument(
-        "--swarm_metric_5",
-        dest="swarm_metric_5",
-        default=False,
-        action="store_true",
-        help="Enable computation and rendering of swarm metric 5",
-    )
-    parser.add_argument(
-        "--swarm_metric_6",
-        dest="swarm_metric_6",
-        default=False,
-        action="store_true",
-        help="Enable computation and rendering of swarm metric 6",
-    )
 
-    parser.add_argument(
-        "--dump_metrics",
-        dest="dump_metrics",
-        default=False,
-        action="store_true",
-        help="Dump metric datas in the visualization folder",
-    )
-
-    parser.add_argument(
-        "--dump_tracking",
-        dest="dump_tracking",
-        default=False,
-        action="store_true",
-        help="Dump tracking datas in the visualization folder. Note that image dump is also required to visualize the data with labelme tool",
-    )
-    parser.add_argument(
-        "--dump_images",
-        dest="dump_images",
-        default=False,
-        action="store_true",
-        help="Dump non-annotated input images",
-    )
-
-    parser.add_argument(
-        # "--path", default="./datasets/mot/train/MOT17-05-FRCNN/img1", help="path to images or video"
-        "--dump_path", dest="dump", default=None, help="dump images and corresponding tracklets into specified folder"
-    )
     # tracking args
     parser.add_argument("--track_thresh", type=float, default=0.5, help="tracking confidence threshold")
     parser.add_argument("--track_buffer", type=int, default=30, help="the frames for keep lost tracks")
@@ -325,9 +255,10 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     else:
         save_path = os.path.join(save_folder, "camera.mp4")
     logger.info(f"video save_path is {save_path}")
-    vid_writer = cv2.VideoWriter(
-        save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (int(width), int(height))
-    )
+    if args.save_result:
+        vid_writer = cv2.VideoWriter(
+            save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (int(width), int(height))
+        )
     tracker = BYTETracker(args, frame_rate=30)
     swarm_metrics = SWARMMetrics(args, save_folder, width, height)
     timer = Timer()
@@ -353,76 +284,15 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                         online_ids.append(tid)
                         online_scores.append(t.score)
                 results.append((frame_id + 1, online_tlwhs, online_ids, online_scores))
-                #timer.toc()
-                #dump_annotated_images(img_info['raw_img'], online_tlwhs, online_ids, save_folder, current_time, args,
-                #                      frame_id=frame_id + 1,
-                #                      fps=1. / timer.average_time)
-                #online_im = plot_tracking(img_info['raw_img'], online_tlwhs, online_ids, frame_id=frame_id + 1,
-                                          #fps=1. / timer.average_time, swarm_metrics=swarm_metrics, disable_basic_hud=args.hide_bounding_boxes, disable_swarm_metric=args.disable_swarm_metric)
                 online_im = plot_tracking(img_info['raw_img'], online_tlwhs, online_ids, frame_id=frame_id + 1,
                                          timer=timer, swarm_metrics=swarm_metrics,
-                                         disable_basic_hud=args.hide_bounding_boxes,
+                                         activate_basic_hud=args.show_bounding_boxes_on_output,
                                          disable_swarm_metric=args.disable_swarm_metric)
             else:
                 timer.toc()
-                dump_annotated_images(img_info['raw_img'], online_tlwhs, online_ids, save_folder, current_time,
-                                          args,
-                                          frame_id=frame_id + 1,
-                                          fps=1. / timer.average_time)
                 online_im = img_info['raw_img']
             if args.save_result:
                 vid_writer.write(online_im)
-            ch = cv2.waitKey(1)
-            if ch == 27 or ch == ord("q") or ch == ord("Q"):
-                break
-        else:
-            break
-        frame_id += 1
-
-
-
-'''
-This function should enable offline metrics computation. TO DO: implementation of those offline metrics 
-At the moment, the function dump output data on the specified path.
-'''
-def offline_swarm_metrics_video_mode(predictor, file_name, current_time, args):
-    cap = cv2.VideoCapture(args.path if args.demo == "video" else args.camid)
-    save_folder = os.path.join(
-        args.dump, time.strftime("%Y_%m_%d_%H_%M_%S", current_time)
-    )
-    os.makedirs(save_folder, exist_ok=True)
-    logger.info(f"starting in dump mode...")
-    tracker = BYTETracker(args, frame_rate=30)
-    timer = Timer()
-    frame_id = 0
-    results = []
-    while True:
-        if frame_id % 20 == 0:
-            logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
-        ret_val, frame = cap.read()
-        if ret_val:
-            outputs, img_info = predictor.inference(frame, timer)
-            if outputs[0] is not None:
-                online_targets = tracker.update(outputs[0], [img_info['height'], img_info['width']], exp.test_size)
-                online_tlwhs = []
-                online_ids = []
-                online_scores = []
-                for t in online_targets:
-                    tlwh = t.tlwh
-                    tid = t.track_id
-                    vertical = tlwh[2] / tlwh[3] > 1.6
-                    if tlwh[2] * tlwh[3] > args.min_box_area and not vertical:
-                        online_tlwhs.append(tlwh)
-                        online_ids.append(tid)
-                        online_scores.append(t.score)
-                results.append((frame_id + 1, online_tlwhs, online_ids, online_scores))
-                timer.toc()
-                dump_annotated_images(img_info['raw_img'], online_tlwhs, online_ids, save_folder, current_time, args,
-                                      frame_id=frame_id + 1,
-                                      fps=1. / timer.average_time)
-            else:
-                timer.toc()
-                dump_non_annotated_images(img_info['raw_img'], save_folder, current_time, args, frame_id)
             ch = cv2.waitKey(1)
             if ch == 27 or ch == ord("q") or ch == ord("Q"):
                 break
@@ -437,10 +307,8 @@ def main(exp, args):
 
     file_name = os.path.join(exp.output_dir, args.experiment_name)
     os.makedirs(file_name, exist_ok=True)
-
-    if args.save_result:
-        vis_folder = os.path.join(file_name, "track_vis")
-        os.makedirs(vis_folder, exist_ok=True)
+    vis_folder = os.path.join(file_name, "track_vis")
+    os.makedirs(vis_folder, exist_ok=True)
 
     if args.trt:
         args.device = "gpu"
@@ -497,10 +365,7 @@ def main(exp, args):
     if args.demo == "image":
         image_demo(predictor, vis_folder, args.path, current_time, args.save_result)
     elif args.demo == "video" or args.demo == "webcam":
-        if args.dump is None:
-            imageflow_demo(predictor, vis_folder, current_time, args)
-        else:
-            offline_swarm_metrics_video_mode(predictor, file_name, current_time, args)
+        imageflow_demo(predictor, vis_folder, current_time, args)
 
 
 if __name__ == "__main__":
